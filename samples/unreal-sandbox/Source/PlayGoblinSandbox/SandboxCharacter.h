@@ -12,4 +12,10 @@ class ASandboxCharacter : public ACharacter
 
 public:
 	ASandboxCharacter();
+	virtual void SetupPlayerInputComponent(class UInputComponent* In) override;
+
+private:
+	void MoveForward(float V);
+	void MoveRight(float V);
+	void Turn(float V);
 };

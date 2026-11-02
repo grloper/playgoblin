@@ -24,7 +24,7 @@ PROJECT = ROOT / "samples" / "unreal-sandbox" / "PlayGoblinSandbox.uproject"
 EXPECTED = [("out_of_world", ""), ("stuck", ""), ("exception", "DeathScreen")]
 
 
-def walk(editor: str, clean: bool, seed: int, seconds: int, out: Path, log: Path, render: bool) -> Path:
+def walk(editor: str, clean: bool, seed: int, seconds: int, out: Path, log: Path, render: bool, extra: list[str]) -> Path:
     shutil.rmtree(out, ignore_errors=True)
     cmd = [editor, str(PROJECT), "-game", "-playgoblin", f"-PlayGoblinSeconds={seconds}", f"-PlayGoblinSeed={seed}",
            f"-PlayGoblinOut={out}", "-PlayGoblinTimeScale=3", "-PlayGoblinExit", "-unattended", "-nosplash",
@@ -33,6 +33,7 @@ def walk(editor: str, clean: bool, seed: int, seconds: int, out: Path, log: Path
         cmd.append("-nullrhi")
     if clean:
         cmd.append("-PGClean")
+    cmd += extra
     subprocess.run(cmd, check=False)
     runs = sorted(p for p in out.glob("*") if (p / "run.json").is_file())
     if not runs:
@@ -46,6 +47,7 @@ def main() -> int:
     ap.add_argument("--seconds", type=int, default=150)
     ap.add_argument("--seeds", type=int, nargs="+", default=[1])
     ap.add_argument("--render", action="store_true", help="render frames (otherwise -nullrhi: no frames)")
+    ap.add_argument("--game-arg", action="append", default=[], help="extra argument for the game, e.g. --game-arg=-PlayGoblinKeys")
     ap.add_argument("--out", default=str(ROOT / "out" / "verify-unreal"))
     args = ap.parse_args()
     out = Path(args.out)
@@ -55,13 +57,13 @@ def main() -> int:
     clean_findings: list[str] = []
     for seed in args.seeds:
         print(f"\n== seed {seed} ==")
-        run = walk(args.editor, False, seed, args.seconds, out / f"broken-s{seed}", out / f"broken-s{seed}.log", args.render)
+        run = walk(args.editor, False, seed, args.seconds, out / f"broken-s{seed}", out / f"broken-s{seed}.log", args.render, args.game_arg)
         findings, _ = analyze([run], out / f"broken-report-s{seed}", Config())
         for typ, text in EXPECTED:
             hit = any(f.type == typ and text.lower() in (f.title + f.detail).lower() for f in findings)
             detected[(typ, text)] += hit
             print(f"  {'found  ' if hit else 'MISSED '} {typ} {text}")
-        run = walk(args.editor, True, seed, args.seconds, out / f"clean-s{seed}", out / f"clean-s{seed}.log", args.render)
+        run = walk(args.editor, True, seed, args.seconds, out / f"clean-s{seed}", out / f"clean-s{seed}.log", args.render, args.game_arg)
         clean, _ = analyze([run], out / f"clean-report-s{seed}", Config())
         clean_findings += [f"seed {seed} {f.type}: {f.title}" for f in clean]
         print(f"  clean sandbox: {len(clean)} finding(s)")

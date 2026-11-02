@@ -1,6 +1,7 @@
 #include "SandboxCharacter.h"
 
 #include "Camera/CameraComponent.h"
+#include "Components/InputComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -20,4 +21,28 @@ ASandboxCharacter::ASandboxCharacter()
 
 	UCameraComponent* Cam = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	Cam->SetupAttachment(Boom);
+}
+
+void ASandboxCharacter::SetupPlayerInputComponent(UInputComponent* In)
+{
+	Super::SetupPlayerInputComponent(In);
+	In->BindAxis(TEXT("MoveForward"), this, &ASandboxCharacter::MoveForward);
+	In->BindAxis(TEXT("MoveRight"), this, &ASandboxCharacter::MoveRight);
+	In->BindAxis(TEXT("Turn"), this, &ASandboxCharacter::Turn);
+	In->BindAction(TEXT("Jump"), IE_Pressed, this, &ACharacter::Jump);
+}
+
+void ASandboxCharacter::MoveForward(float V)
+{
+	if (V != 0.f && Controller) AddMovementInput(FRotationMatrix(FRotator(0, Controller->GetControlRotation().Yaw, 0)).GetUnitAxis(EAxis::X), V);
+}
+
+void ASandboxCharacter::MoveRight(float V)
+{
+	if (V != 0.f && Controller) AddMovementInput(FRotationMatrix(FRotator(0, Controller->GetControlRotation().Yaw, 0)).GetUnitAxis(EAxis::Y), V);
+}
+
+void ASandboxCharacter::Turn(float V)
+{
+	AddControllerYawInput(V);
 }
