@@ -1,8 +1,6 @@
 # PlayGoblin for Unreal Engine (experimental)
 
-> **Status: compiles (0 errors, 0 warnings; UE 5.8.3, Win64 Development Editor) and writes a run folder, report and frames on a real game (first run 2026-11-02). Walking is NOT yet verified, see Known issues below. Earlier note: written, not yet compiled or run.** The code follows the Unity package's design and was written against UE 5.8 headers from memory.
-> The first build attempt did not get as far as the compiler (a running editor blocked it), so expect compile errors to fix on first use.
-> Nothing here has been verified against a real level. If you try it, please open an issue with what happened.
+> **Status: compiles (0 errors, 0 warnings; UE 5.8.3, Win64 Development Editor) and is verified on its own sample (2026-11-02).** `scripts/verify_unreal.py` (UnrealEditor-Cmd, seed 1, 150 s, `-nullrhi`) finds all three planted bugs in `samples/unreal-sandbox` (trapdoor fall, 70 cm step stuck, error after first fall) and reports 0 findings on the `-PGClean` level; the same result with `--game-arg=-PlayGoblinKeys` (real input). One seed and one machine only: not yet verified on a real game, and frame capture (rendered mode) was not re-run. Please open an issue with what happened if you try it.
 
 A C++ runtime plugin that walks a game and writes the same run folder as the Unity package ([docs/PROTOCOL.md](../docs/PROTOCOL.md)),
 so `playgoblin report`, `playgoblin file-issues` and the MCP server work unchanged.

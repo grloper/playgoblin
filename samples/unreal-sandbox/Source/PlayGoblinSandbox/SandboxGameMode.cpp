@@ -1,6 +1,7 @@
 #include "SandboxGameMode.h"
 
 #include "Components/DirectionalLightComponent.h"
+#include "Components/SkyLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/SkyLight.h"
