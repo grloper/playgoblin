@@ -1,6 +1,6 @@
 # PlayGoblin for Unreal Engine (experimental)
 
-> **Status: written, not yet compiled or run.** The code follows the Unity package's design and was written against UE 5.8 headers from memory.
+> **Status: compiles (0 errors, 0 warnings; UE 5.8.3, Win64 Development Editor) and writes a run folder, report and frames on a real game (first run 2026-11-02). Walking is NOT yet verified, see Known issues below. Earlier note: written, not yet compiled or run.** The code follows the Unity package's design and was written against UE 5.8 headers from memory.
 > The first build attempt did not get as far as the compiler (a running editor blocked it), so expect compile errors to fix on first use.
 > Nothing here has been verified against a real level. If you try it, please open an issue with what happened.
 
@@ -52,3 +52,8 @@ playgoblin run --minutes 10
 Build.bat PlayGoblinSandboxEditor Win64 Development -Project=C:/pg/samples/unreal-sandbox/PlayGoblinSandbox.uproject -WaitMutex
 python scripts/verify_unreal.py --editor "C:/Program Files/Epic Games/UE_5.8/Engine/Binaries/Win64/UnrealEditor-Cmd.exe"
 ```
+
+## Known issues (first real run, 2026-11-02)
+- The floor grid used to trace from the top of the level on `ECC_Visibility` and rejected every cell in a game with roof/sky meshes. It now traces on `ECC_Pawn` from head height and skips actors the trace starts inside.
+- In the first game tested the pawn stayed in `MOVE_Falling` with zero velocity and no floor at spawn, so the bot never moved. `waypoint_timeout` events now carry movement diagnostics. Whether this is a game bug (player embedded in collision) or a plugin issue is not yet resolved.
+- Launching with `UnrealEditor-Cmd.exe` while the project enables Epic's experimental toolset plugins logs ~47 Python `Error` lines at t=0; they are reported as findings. These are false positives and need a filter (planned).

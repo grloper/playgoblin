@@ -40,6 +40,7 @@ public:
 			FParse::Value(FCommandLine::Get(), TEXT("PlayGoblinTimeScale="), Auto.TimeScale);
 			FParse::Value(FCommandLine::Get(), TEXT("PlayGoblinFpsBudgetMs="), Auto.FpsBudgetMs);
 			Auto.bExitWhenDone = FParse::Param(FCommandLine::Get(), TEXT("PlayGoblinExit"));
+			Auto.bUseKeys = FParse::Param(FCommandLine::Get(), TEXT("PlayGoblinKeys"));
 			bAutoPending = true;
 		}
 		Ticker = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateRaw(this, &FPlayGoblinModule::Tick));

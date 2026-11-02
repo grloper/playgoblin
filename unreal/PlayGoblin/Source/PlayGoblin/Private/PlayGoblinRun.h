@@ -29,6 +29,8 @@ struct FPlayGoblinOptions
 	float FpsBudgetMs = 0.f;
 	float TimeScale = 1.f;
 	bool bExitWhenDone = false;
+	/** Drive the pawn with simulated key presses (W + control yaw) instead of AddMovementInput, so a missing or broken input binding shows up as a bot that cannot move. */
+	bool bUseKeys = false;
 };
 
 enum class EPGState : uint8 { Idle, Starting, Running, Ended };
@@ -103,6 +105,12 @@ private:
 	void BuildGrid(UWorld* World, APawn* Pawn);
 	void PickDestination(UWorld* World, APawn* Pawn);
 	void Walk(UWorld* World, APawn* Pawn, double T);
+	/** Reads the game's real bindings (legacy key/axis bindings on the pawn and controller input components). */
+	void DiscoverInputs(APawn* Pawn);
+	/** Turns toward a yaw with simulated mouse movement, like a person would. Falls back to SetControlRotation if the mouse does nothing. */
+	void HumanLook(APlayerController* PC, float DesiredYaw);
+	void PressKey(APlayerController* PC, const FKey& Key, double T);
+	void UpdateKeyPresses(APlayerController* PC, double T);
 	bool FeedStuck(double T, const FVector& P, bool bTrying);
 	void CaptureFrame(double T);
 	int32 CellIndex(const FVector& P) const;
@@ -132,6 +140,20 @@ private:
 	TArray<FVector> Path;
 	int32 PathIndex = 0;
 	FVector Dest = FVector::ZeroVector;
+	bool bKeyDown = false;
+	TArray<FKey> ForwardKeys;
+	TArray<FKey> ActionKeys;
+	FKey JumpKey;
+	bool bMouseLookBound = false;
+	bool bMouseLookWorks = true;
+	bool bMouseLookChecked = false;
+	float MouseProbeSent = 0.f;
+	float MouseProbeYaw = 0.f;
+	bool bMouseProbeStarted = false;
+	FKey PressedKey;
+	double ReleaseAt = -1.0;
+	double NextActionAt = 3.0;
+	int32 KeyPresses = 0;
 	bool bHasDest = false;
 	double DestSince = 0;
 	int32 Waypoints = 0, Stucks = 0, Falls = 0, Respawns = 0;

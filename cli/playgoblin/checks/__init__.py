@@ -3,9 +3,9 @@ from __future__ import annotations
 
 from ..config import Config
 from ..model import Finding, Run
-from . import blank_frames, dead_buttons, exceptions, falls, fps, placeholder, setup, stuck, trapped
+from . import blank_frames, dead_buttons, exceptions, falls, fps, inputs, placeholder, setup, stuck, trapped
 
-ALL = (setup, exceptions, stuck, falls, trapped, dead_buttons, placeholder, fps, blank_frames)
+ALL = (setup, exceptions, stuck, falls, trapped, dead_buttons, placeholder, fps, blank_frames, inputs)
 
 
 def run_checks(run: Run, config: Config) -> list[Finding]:
