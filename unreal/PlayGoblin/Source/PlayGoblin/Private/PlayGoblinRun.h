@@ -103,6 +103,8 @@ private:
 
 	void OnPlayerFound(UWorld* World, APawn* Pawn);
 	void BuildGrid(UWorld* World, APawn* Pawn);
+	/** Reports visible actors that still look like a prototype (engine default/grid material, /Engine/BasicShapes mesh) as prototype_look events. */
+	void ScanPrototypeLook(UWorld* World, APawn* Pawn);
 	void PickDestination(UWorld* World, APawn* Pawn);
 	void Walk(UWorld* World, APawn* Pawn, double T);
 	/** Reads the game's real bindings (legacy key/axis bindings on the pawn and controller input components). */
