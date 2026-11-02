@@ -6,7 +6,7 @@ public class PlayGoblin : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore" });
 		PrivateDependencyModuleNames.AddRange(new string[] { "NavigationSystem", "HTTPServer", "Json", "Slate", "SlateCore" });
 	}
 }

@@ -19,6 +19,8 @@
 #include "NavigationPath.h"
 #include "NavigationSystem.h"
 #include "UnrealClient.h"
+#include "InputKeyEventArgs.h"
+#include "InputCoreTypes.h"
 
 DEFINE_LOG_CATEGORY(LogPlayGoblin);
 
@@ -450,6 +452,12 @@ void FPlayGoblinRun::Walk(UWorld* World, APawn* Pawn, double T)
 	const bool bFinal = PathIndex >= Path.Num() - 1;
 	if (Dir.Size() < (bFinal ? 150.f : 120.f))
 	{
+		if (bKeyDown)
+		{
+			if (APlayerController* KeyPC = Cast<APlayerController>(Pawn->GetController()))
+				KeyPC->InputKey(FInputKeyEventArgs::CreateSimulated(EKeys::W, IE_Released, 0.f, 1, FInputDeviceId::CreateFromInternalId(0)));
+			bKeyDown = false;
+		}
 		if (bFinal)
 		{
 			Waypoints++;
@@ -460,7 +468,20 @@ void FPlayGoblinRun::Walk(UWorld* World, APawn* Pawn, double T)
 		return;
 	}
 	Dir.Normalize();
-	Pawn->AddMovementInput(Dir, 1.f);
+	if (Options.bUseKeys)
+	{
+		if (APlayerController* KeyPC = Cast<APlayerController>(Pawn->GetController()))
+		{
+			FRotator R = KeyPC->GetControlRotation(); R.Yaw = Dir.Rotation().Yaw;
+			KeyPC->SetControlRotation(R);
+			KeyPC->InputKey(FInputKeyEventArgs::CreateSimulated(EKeys::W, bKeyDown ? IE_Repeat : IE_Pressed, 1.f, 1, FInputDeviceId::CreateFromInternalId(0)));
+			bKeyDown = true;
+		}
+	}
+	else
+	{
+		Pawn->AddMovementInput(Dir, 1.f);
+	}
 
 	if (bGrounded && FeedStuck(T, Loc, true))
 	{

@@ -29,6 +29,8 @@ struct FPlayGoblinOptions
 	float FpsBudgetMs = 0.f;
 	float TimeScale = 1.f;
 	bool bExitWhenDone = false;
+	/** Drive the pawn with simulated key presses (W + control yaw) instead of AddMovementInput, so a missing or broken input binding shows up as a bot that cannot move. */
+	bool bUseKeys = false;
 };
 
 enum class EPGState : uint8 { Idle, Starting, Running, Ended };
@@ -132,6 +134,7 @@ private:
 	TArray<FVector> Path;
 	int32 PathIndex = 0;
 	FVector Dest = FVector::ZeroVector;
+	bool bKeyDown = false;
 	bool bHasDest = false;
 	double DestSince = 0;
 	int32 Waypoints = 0, Stucks = 0, Falls = 0, Respawns = 0;
