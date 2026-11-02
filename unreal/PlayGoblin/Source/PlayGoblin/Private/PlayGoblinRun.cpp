@@ -21,6 +21,8 @@
 #include "UnrealClient.h"
 #include "InputKeyEventArgs.h"
 #include "InputCoreTypes.h"
+#include "GameFramework/PlayerInput.h"
+#include "Components/InputComponent.h"
 
 DEFINE_LOG_CATEGORY(LogPlayGoblin);
 
@@ -274,6 +276,7 @@ void FPlayGoblinRun::OnPlayerFound(UWorld* World, APawn* Pawn)
 	Add(TEXT("player_found"), Pawn->GetName(), &P, {
 		{ TEXT("mover"), MoverKind }, { TEXT("navmesh"), bUsesNav ? TEXT("true") : TEXT("false") },
 		{ TEXT("reachable_cells"), FString::FromInt(Walkable.Num()) } });
+	DiscoverInputs(Pawn);
 }
 
 int32 FPlayGoblinRun::CellIndex(const FVector& P) const
@@ -455,7 +458,7 @@ void FPlayGoblinRun::Walk(UWorld* World, APawn* Pawn, double T)
 		if (bKeyDown)
 		{
 			if (APlayerController* KeyPC = Cast<APlayerController>(Pawn->GetController()))
-				KeyPC->InputKey(FInputKeyEventArgs::CreateSimulated(EKeys::W, IE_Released, 0.f, 1, FInputDeviceId::CreateFromInternalId(0)));
+				KeyPC->InputKey(FInputKeyEventArgs::CreateSimulated(ForwardKeys.Num() > 0 ? ForwardKeys[0] : EKeys::W, IE_Released, 0.f, 1, FInputDeviceId::CreateFromInternalId(0)));
 			bKeyDown = false;
 		}
 		if (bFinal)
@@ -472,10 +475,21 @@ void FPlayGoblinRun::Walk(UWorld* World, APawn* Pawn, double T)
 	{
 		if (APlayerController* KeyPC = Cast<APlayerController>(Pawn->GetController()))
 		{
-			FRotator R = KeyPC->GetControlRotation(); R.Yaw = Dir.Rotation().Yaw;
-			KeyPC->SetControlRotation(R);
-			KeyPC->InputKey(FInputKeyEventArgs::CreateSimulated(EKeys::W, bKeyDown ? IE_Repeat : IE_Pressed, 1.f, 1, FInputDeviceId::CreateFromInternalId(0)));
-			bKeyDown = true;
+			HumanLook(KeyPC, Dir.Rotation().Yaw);
+			// Walk only roughly facing the target, like a person who turns, then goes.
+			const float Err = FMath::Abs(FRotator::NormalizeAxis(Dir.Rotation().Yaw - KeyPC->GetControlRotation().Yaw));
+			const FKey Fwd = ForwardKeys.Num() > 0 ? ForwardKeys[0] : EKeys::W;
+			if (Err < 50.f)
+			{
+				KeyPC->InputKey(FInputKeyEventArgs::CreateSimulated(Fwd, bKeyDown ? IE_Repeat : IE_Pressed, 1.f, 1, FInputDeviceId::CreateFromInternalId(0)));
+				bKeyDown = true;
+			}
+			else if (bKeyDown)
+			{
+				KeyPC->InputKey(FInputKeyEventArgs::CreateSimulated(Fwd, IE_Released, 0.f, 1, FInputDeviceId::CreateFromInternalId(0)));
+				bKeyDown = false;
+			}
+			UpdateKeyPresses(KeyPC, T);
 		}
 	}
 	else
@@ -491,6 +505,8 @@ void FPlayGoblinRun::Walk(UWorld* World, APawn* Pawn, double T)
 		FCollisionQueryParams Q(SCENE_QUERY_STAT(PlayGoblinStuck), false, Pawn);
 		if (World->LineTraceSingleByChannel(Hit, Loc, Loc + Dir * 200.f, ECC_Visibility, Q) && Hit.GetActor())
 			Blocked = Hit.GetActor()->GetName();
+		if (Options.bUseKeys && JumpKey.IsValid())
+			if (APlayerController* HopPC = Cast<APlayerController>(Pawn->GetController())) PressKey(HopPC, JumpKey, T); // a person tries hopping over it
 		Add(TEXT("stuck"), FString::Printf(TEXT("no progress for %.0fs"), Options.StuckSeconds), &Loc, {
 			{ TEXT("blocked_by"), Blocked },
 			{ TEXT("controller"), CMC ? StaticEnum<EMovementMode>()->GetNameStringByValue(CMC->MovementMode) : TEXT("") } });
@@ -571,4 +587,112 @@ void FPlayGoblinRun::WriteSummary(const TArray<FPGLogCapture::FGroup>& Groups)
 	}
 	J += TEXT("]}");
 	FFileHelper::SaveStringToFile(J, *FPaths::Combine(RunDirectory, TEXT("run.json")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+}
+
+void FPlayGoblinRun::DiscoverInputs(APawn* Pawn)
+{
+	APlayerController* PC = Cast<APlayerController>(Pawn->GetController());
+	UPlayerInput* PlayerIn = PC ? PC->PlayerInput.Get() : nullptr;
+	TArray<UInputComponent*> Comps;
+	if (Pawn->InputComponent) Comps.Add(Pawn->InputComponent);
+	if (PC && PC->InputComponent) Comps.Add(PC->InputComponent);
+
+	TArray<FString> Axes;
+	bool bEnhanced = false;
+	for (UInputComponent* C : Comps)
+	{
+		if (C->GetClass()->GetName().Contains(TEXT("Enhanced"))) bEnhanced = true;
+		for (const FInputKeyBinding& KB : C->KeyBindings)
+		{
+			const FKey K = KB.Chord.Key;
+			if (KB.KeyEvent != IE_Pressed || !K.IsValid() || K == EKeys::Escape) continue;
+			if (K == EKeys::SpaceBar || (!JumpKey.IsValid() && K == EKeys::Gamepad_FaceButton_Bottom)) JumpKey = K;
+			if (!K.IsGamepadKey()) ActionKeys.AddUnique(K);
+		}
+		for (const FInputAxisBinding& AB : C->AxisBindings)
+		{
+			Axes.AddUnique(AB.AxisName.ToString());
+			if (!PlayerIn) continue;
+			const FString Name = AB.AxisName.ToString();
+			const bool bForwardAxis = Name.Contains(TEXT("Forward")) || Name.Contains(TEXT("Vertical")) || Name.Contains(TEXT("MoveY"));
+			for (const FInputAxisKeyMapping& M : PlayerIn->GetKeysForAxis(AB.AxisName))
+			{
+				if (M.Key == EKeys::MouseX) bMouseLookBound = true;
+				if (bForwardAxis && M.Scale > 0.f && !M.Key.IsAnalog() && !M.Key.IsGamepadKey()) ForwardKeys.AddUnique(M.Key);
+			}
+		}
+		for (const FInputAxisKeyBinding& AKB : C->AxisKeyBindings)
+			if (AKB.AxisKey == EKeys::MouseX) bMouseLookBound = true;
+	}
+	ForwardKeys.Sort([](const FKey& A, const FKey& B) { return A == EKeys::W; }); // prefer W when several keys move forward
+
+	auto Join = [](const TArray<FKey>& Ks) { TArray<FString> S; for (const FKey& K : Ks) S.Add(K.ToString()); return FString::Join(S, TEXT(",")); };
+	const FVector P = Pawn->GetActorLocation();
+	Add(TEXT("input_map"), TEXT(""), &P, {
+		{ TEXT("forward_keys"), Join(ForwardKeys) }, { TEXT("action_keys"), Join(ActionKeys) },
+		{ TEXT("jump_key"), JumpKey.IsValid() ? JumpKey.ToString() : TEXT("") },
+		{ TEXT("mouse_look"), bMouseLookBound ? TEXT("true") : TEXT("false") },
+		{ TEXT("axes"), FString::Join(Axes, TEXT(",")) }, { TEXT("enhanced_input"), bEnhanced ? TEXT("true") : TEXT("false") } });
+	if (!bEnhanced)
+	{
+		if (ForwardKeys.Num() == 0)
+			Add(TEXT("dead_input"), TEXT("No keyboard key moves the player forward"), &P, { { TEXT("input"), TEXT("move") }, { TEXT("axes"), FString::Join(Axes, TEXT(",")) } });
+		if (!bMouseLookBound)
+			Add(TEXT("dead_input"), TEXT("Moving the mouse does not turn the camera (no MouseX binding)"), &P, { { TEXT("input"), TEXT("look") } });
+	}
+}
+
+void FPlayGoblinRun::HumanLook(APlayerController* PC, float DesiredYaw)
+{
+	const float Yaw = PC->GetControlRotation().Yaw;
+	const float Err = FRotator::NormalizeAxis(DesiredYaw - Yaw);
+	if (!bMouseLookBound || !bMouseLookWorks)
+	{
+		FRotator R = PC->GetControlRotation(); R.Yaw = Yaw + FMath::Clamp(Err, -12.f, 12.f); // turn smoothly, not in one snap
+		PC->SetControlRotation(R);
+		return;
+	}
+	if (FMath::Abs(Err) < 2.f) return;
+	// Mouse counts: proportional, clamped like a wrist flick. The game's own sensitivity decides how far that turns.
+	const float MouseCounts = FMath::Clamp(Err * 1.5f, -40.f, 40.f);
+	if (!bMouseLookChecked)
+	{
+		if (!bMouseProbeStarted) { bMouseProbeStarted = true; MouseProbeYaw = Yaw; }
+		MouseProbeSent += FMath::Abs(MouseCounts);
+		if (MouseProbeSent > 400.f)
+		{
+			bMouseLookChecked = true;
+			if (FMath::Abs(FRotator::NormalizeAxis(Yaw - MouseProbeYaw)) < 0.5f)
+			{
+				bMouseLookWorks = false;
+				const FVector P = PC->GetPawn() ? PC->GetPawn()->GetActorLocation() : FVector::ZeroVector;
+				Add(TEXT("dead_input"), TEXT("Moving the mouse does not turn the camera"), &P, { { TEXT("input"), TEXT("look") }, { TEXT("mouse_counts_sent"), FString::SanitizeFloat(MouseProbeSent) } });
+				return;
+			}
+		}
+	}
+	PC->InputKey(FInputKeyEventArgs::CreateSimulated(EKeys::MouseX, IE_Axis, MouseCounts, 1, FInputDeviceId::CreateFromInternalId(0)));
+}
+
+void FPlayGoblinRun::PressKey(APlayerController* PC, const FKey& Key, double T)
+{
+	if (ReleaseAt >= 0.0 || !Key.IsValid()) return; // one tap at a time
+	PC->InputKey(FInputKeyEventArgs::CreateSimulated(Key, IE_Pressed, 1.f, 1, FInputDeviceId::CreateFromInternalId(0)));
+	PressedKey = Key; ReleaseAt = T + 0.15; KeyPresses++;
+	const FVector P = PC->GetPawn() ? PC->GetPawn()->GetActorLocation() : FVector::ZeroVector;
+	Add(TEXT("input_press"), Key.ToString(), &P);
+}
+
+void FPlayGoblinRun::UpdateKeyPresses(APlayerController* PC, double T)
+{
+	if (ReleaseAt >= 0.0 && T >= ReleaseAt)
+	{
+		PC->InputKey(FInputKeyEventArgs::CreateSimulated(PressedKey, IE_Released, 0.f, 1, FInputDeviceId::CreateFromInternalId(0)));
+		ReleaseAt = -1.0;
+	}
+	if (T >= NextActionAt && ActionKeys.Num() > 0)
+	{
+		PressKey(PC, ActionKeys[Rng.RandRange(0, ActionKeys.Num() - 1)], T);
+		NextActionAt = T + Rng.FRandRange(2.5f, 6.0f);
+	}
 }
