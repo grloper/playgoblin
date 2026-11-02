@@ -36,6 +36,7 @@ Every line: `{"seq": 1, "t": 0.0, "type": "...", "detail": "optional text", "pos
 | `error_summary` | One group of identical errors, written at the end | `detail` = message; `data`: **hash**, **kind** (`exception` or `error`), **count**, first_t, last_t; `pos` |
 | `dead_button` | A UI button that did nothing when clicked twice | `detail` = label; `data`: path, label, scene |
 | `placeholder_text` | TODO/lorem-style text visible in the UI | `detail` = text; `data`: path |
+| `prototype_look` | A visible actor still looks like a prototype: engine default/grid material, or a mesh from `/Engine/BasicShapes/` (one event per actor, at most 50 per run, written right after `player_found`) | `detail` = actor label; `pos`; `data`: reason (`basic_shape` or `default_material`), mesh, material, component, total (all offending actors, may exceed 50) |
 | `input_map` | What the engine side found bound to input (info) | `data`: forward_keys, action_keys, jump_key, mouse_look (`true`/`false`), axes, enhanced_input |
 | `dead_input` | A control does nothing (e.g. no key moves the player forward) | `detail`; `data`: input (`move` or `look`) |
 | `input_press` | A key the bot pressed (info only) | `detail` = key name |
@@ -70,6 +71,7 @@ Only `run_id` is needed; the rest shows up in the report header when present.
 | Player never moved | `player_found` + `pos` | critical; run over 20 s and under 1 m of spread |
 | Engine startup noise | `error_summary` | low; Unreal `LogPython:` lines at t<=1 s from `/Engine/Plugins/`, collapsed into one finding |
 | Placeholder text, magenta (missing material) frames | `placeholder_text`, `frames/` | medium |
+| Prototype look | `prototype_look` | medium; one finding per actor (key `prototype:<actor>`); Unreal plugin only for now |
 | Frame rate drop | `fps_drop` | medium; `fps_budget_ms` in `playgoblin.toml` can filter |
 | Blank screen | `frames/` | high; needs numpy and Pillow |
 

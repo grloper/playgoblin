@@ -1,6 +1,11 @@
 #include "PlayGoblinRun.h"
 
 #include "Engine/World.h"
+#include "Engine/StaticMesh.h"
+#include "Components/StaticMeshComponent.h"
+#include "Components/PrimitiveComponent.h"
+#include "Materials/Material.h"
+#include "Materials/MaterialInterface.h"
 #include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/Character.h"
@@ -276,7 +281,64 @@ void FPlayGoblinRun::OnPlayerFound(UWorld* World, APawn* Pawn)
 	Add(TEXT("player_found"), Pawn->GetName(), &P, {
 		{ TEXT("mover"), MoverKind }, { TEXT("navmesh"), bUsesNav ? TEXT("true") : TEXT("false") },
 		{ TEXT("reachable_cells"), FString::FromInt(Walkable.Num()) } });
+	ScanPrototypeLook(World, Pawn);
 	DiscoverInputs(Pawn);
+}
+
+void FPlayGoblinRun::ScanPrototypeLook(UWorld* World, APawn* Pawn)
+{
+	constexpr int32 MaxReported = 50;
+	const UMaterial* DefaultMat = UMaterial::GetDefaultMaterial(MD_Surface);
+	auto IsPlaceholderMaterial = [DefaultMat](const UMaterialInterface* M)
+	{
+		if (!M) return false;
+		if (M == DefaultMat) return true;
+		if (!M->GetPathName().StartsWith(TEXT("/Engine/"))) return false;
+		const FString Name = M->GetName();
+		return Name.Contains(TEXT("WorldGridMaterial")) || Name.Contains(TEXT("DefaultMaterial"))
+			|| Name.Contains(TEXT("BasicShapeMaterial")) || Name.Contains(TEXT("Checker"));
+	};
+
+	struct FHit { FString Actor, Reason, Mesh, Material, Component; FVector Loc; };
+	TArray<FHit> Hits;
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		AActor* A = *It;
+		if (A == Pawn || Cast<APawn>(A) || A->IsHidden() || A->IsEditorOnly()) continue;
+		TInlineComponentArray<UPrimitiveComponent*> Prims;
+		A->GetComponents(Prims);
+		for (UPrimitiveComponent* C : Prims)
+		{
+			if (!C || !C->IsVisible() || C->IsEditorOnly()) continue;
+			const UStaticMeshComponent* SMC = Cast<UStaticMeshComponent>(C);
+			const UStaticMesh* Mesh = SMC ? SMC->GetStaticMesh() : nullptr;
+			const FString MeshPath = Mesh ? Mesh->GetPathName() : FString();
+			const bool bBasic = MeshPath.StartsWith(TEXT("/Engine/BasicShapes/"));
+			FString BadMat;
+			for (int32 i = 0, N = C->GetNumMaterials(); i < N; ++i)
+			{
+				const UMaterialInterface* M = C->GetMaterial(i);
+				if (IsPlaceholderMaterial(M)) { BadMat = M->GetPathName(); break; }
+			}
+			if (!bBasic && BadMat.IsEmpty()) continue;
+			FHit H;
+#if WITH_EDITOR
+			H.Actor = A->GetActorLabel();
+#endif
+			if (H.Actor.IsEmpty()) H.Actor = A->GetName();
+			H.Reason = bBasic ? TEXT("basic_shape") : TEXT("default_material");
+			H.Mesh = MeshPath; H.Material = BadMat; H.Component = C->GetName(); H.Loc = A->GetActorLocation();
+			Hits.Add(MoveTemp(H));
+			break; // one event per actor
+		}
+	}
+	for (int32 i = 0; i < Hits.Num() && i < MaxReported; ++i)
+	{
+		const FHit& H = Hits[i];
+		Add(TEXT("prototype_look"), H.Actor, &H.Loc, { { TEXT("reason"), H.Reason }, { TEXT("mesh"), H.Mesh }, { TEXT("material"), H.Material },
+			{ TEXT("component"), H.Component }, { TEXT("total"), FString::FromInt(Hits.Num()) } });
+	}
+	UE_LOG(LogPlayGoblin, Log, TEXT("Prototype look: %d actor(s) with placeholder meshes/materials (%d reported)"), Hits.Num(), FMath::Min(Hits.Num(), MaxReported));
 }
 
 int32 FPlayGoblinRun::CellIndex(const FVector& P) const

@@ -10,6 +10,7 @@ so `playgoblin report`, `playgoblin file-issues` and the MCP server work unchang
 - Finds the possessed pawn of player 0 (best with an `ACharacter`), picks random walkable destinations and moves with `AddMovementInput`.
 - Uses the NavMesh when the level has one (`UNavigationSystemV1`), otherwise a floor grid sampled with line traces.
 - Detects stuck spots (no horizontal progress for 5 s), falls below the level, and respawns the player at the last safe spot.
+- Prototype look: at run start it lists visible actors that use the engine default/grid material (`WorldGridMaterial`, `DefaultMaterial`, `BasicShapeMaterial`, `Checker` under `/Engine/`) or a mesh from `/Engine/BasicShapes/`, as `prototype_look` events (max 50 actors, one event each; `data.total` has the full count). The CLI turns each into a medium finding. It checks only static assigned materials and meshes, so art that is a placeholder in other ways (grey custom materials, UI) is not seen. The generated sandbox is all engine cubes, so it reports 6 on both levels; `verify_unreal.py` prints that count and does not count it as a miss or false positive.
 - Captures `Error` logs (and `LogScript` warnings, as exceptions), grouped by message.
 - Optional frame capture through `FScreenshotRequest` (not with `-nullrhi`), and frame-rate drops with a budget.
 - Local HTTP API (same routes as Unity) on 127.0.0.1:47321 for `playgoblin run`.
