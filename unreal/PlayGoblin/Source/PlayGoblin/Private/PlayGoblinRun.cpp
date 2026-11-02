@@ -301,21 +301,42 @@ void FPlayGoblinRun::BuildGrid(UWorld* World, APawn* Pawn)
 	FCollisionQueryParams Q(SCENE_QUERY_STAT(PlayGoblinGrid), false, Pawn);
 	const FCollisionShape Capsule = FCollisionShape::MakeCapsule(Radius * 0.9f, HalfHeight);
 	float LowestGround = LevelZ;
+	int32 RejNoHit = 0, RejSteep = 0, RejOverlap = 0;
+	TArray<FString> IgnoredVolumes;
 	for (int32 Y = 0; Y < GridNz; ++Y)
 		for (int32 X = 0; X < GridNx; ++X)
 		{
 			const FVector C(GridMin.X + (X + 0.5f) * CellCm, GridMin.Y + (Y + 0.5f) * CellCm, 0.f);
 			FHitResult Hit;
-			const FVector From(C.X, C.Y, Bounds.Max.Z + 500.f), To(C.X, C.Y, Bounds.Min.Z - 5000.f);
-			if (!World->LineTraceSingleByChannel(Hit, From, To, ECC_Visibility, Q)) continue;
-			if (Hit.ImpactNormal.Z < 0.7f || FMath::Abs(Hit.ImpactPoint.Z - LevelZ) > Options.MaxClimbCm) continue;
+			// Start just above head height at the player's level, not above the whole level: a trace from the top of the
+			// bounds lands on roofs, sky domes and ceilings and rejects every cell (found on the first real Unreal run).
+			const FVector From(C.X, C.Y, LevelZ + Options.MaxClimbCm + 2.f * HalfHeight), To(C.X, C.Y, Bounds.Min.Z - 5000.f);
+			// Trace with the channel the pawn's own movement collides with. ECC_Visibility also hits invisible helper volumes
+			// and meshes that only block the camera, which the player walks straight through.
+			bool bHit = false;
+			// A trace that starts inside a blocking volume reports a hit at its own start point. A huge volume around the
+			// player (found in the first real game: one actor spanning the whole level) would hide the ground in every cell,
+			// so ignore actors the trace starts inside and trace again.
+			for (int32 Try = 0; Try < 4; ++Try)
+			{
+				bHit = World->LineTraceSingleByChannel(Hit, From, To, ECC_Pawn, Q);
+				if (!bHit || !Hit.bStartPenetrating || !Hit.GetActor()) break;
+				IgnoredVolumes.AddUnique(Hit.GetActor()->GetName());
+				Q.AddIgnoredActor(Hit.GetActor());
+				bHit = false;
+			}
+			if (!bHit) { ++RejNoHit; continue; }
+			if (Hit.ImpactNormal.Z < 0.7f || FMath::Abs(Hit.ImpactPoint.Z - LevelZ) > Options.MaxClimbCm) { ++RejSteep; continue; }
 			const FVector Stand = Hit.ImpactPoint + FVector(0, 0, HalfHeight + 5.f);
-			if (World->OverlapBlockingTestByChannel(Stand, FQuat::Identity, ECC_Pawn, Capsule, Q)) continue;
+			if (World->OverlapBlockingTestByChannel(Stand, FQuat::Identity, ECC_Pawn, Capsule, Q)) { ++RejOverlap; continue; }
 			Walkable.Add(Hit.ImpactPoint);
 			WalkableCell.Add(Y * GridNx + X);
 			LowestGround = FMath::Min(LowestGround, Hit.ImpactPoint.Z);
 		}
 	FallZ = LowestGround - 1000.f;
+	for (const FString& N : IgnoredVolumes) UE_LOG(LogTemp, Display, TEXT("PlayGoblin grid: ignored actor that encloses the player's level: %s"), *N);
+	UE_LOG(LogTemp, Display, TEXT("PlayGoblin grid: %dx%d cells, walkable=%d, rejected: no-hit=%d steep-or-far=%d blocked=%d, LevelZ=%.0f, bounds=%s"),
+		GridNx, GridNz, Walkable.Num(), RejNoHit, RejSteep, RejOverlap, LevelZ, *Bounds.ToString());
 }
 
 void FPlayGoblinRun::PickDestination(UWorld* World, APawn* Pawn)
@@ -405,7 +426,21 @@ void FPlayGoblinRun::Walk(UWorld* World, APawn* Pawn, double T)
 
 	if (!bHasDest || T - DestSince > 40.0)
 	{
-		if (bHasDest) Add(TEXT("waypoint_timeout"), TEXT(""), &Loc);
+		if (bHasDest)
+		{
+			APlayerController* PCDiag = Cast<APlayerController>(Pawn->GetController());
+			Add(TEXT("waypoint_timeout"), TEXT(""), &Loc, {
+				{ TEXT("mode"), CMC ? StaticEnum<EMovementMode>()->GetNameStringByValue(CMC->MovementMode) : TEXT("none") },
+				{ TEXT("move_ignored"), PCDiag && PCDiag->IsMoveInputIgnored() ? TEXT("true") : TEXT("false") },
+				{ TEXT("has_controller"), Pawn->GetController() ? TEXT("true") : TEXT("false") },
+				{ TEXT("max_speed"), FString::SanitizeFloat(CMC ? CMC->MaxWalkSpeed : 0.f) },
+				{ TEXT("velocity_cm_s"), FString::SanitizeFloat(Pawn->GetVelocity().Size()) },
+				{ TEXT("floor_hit"), CMC && CMC->CurrentFloor.bBlockingHit ? TEXT("true") : TEXT("false") },
+				{ TEXT("floor_actor"), CMC && CMC->CurrentFloor.HitResult.GetActor() ? CMC->CurrentFloor.HitResult.GetActor()->GetName() : TEXT("") },
+				{ TEXT("gravity_scale"), FString::SanitizeFloat(CMC ? CMC->GravityScale : 0.f) },
+				{ TEXT("custom_time_dilation"), FString::SanitizeFloat(Pawn->CustomTimeDilation) },
+				{ TEXT("dest"), PlayGoblin::MetresCsv(Dest) } });
+		}
 		PickDestination(World, Pawn);
 		if (!bHasDest) return;
 	}
