@@ -1,0 +1,17 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "5.8",
+	"Category": "",
+	"Description": "A small level with planted bugs for checking the PlayGoblin Unreal plugin.",
+	"Modules": [
+		{
+			"Name": "PlayGoblinSandbox",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"AdditionalPluginDirectories": [ "../../unreal" ],
+	"Plugins": [
+		{ "Name": "PlayGoblin", "Enabled": true }
+	]
+}

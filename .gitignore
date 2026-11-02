@@ -1,0 +1,29 @@
+# Unity generated
+samples/**/Library/
+samples/**/Temp/
+samples/**/Logs/
+samples/**/UserSettings/
+samples/**/obj/
+samples/**/*.csproj
+samples/**/*.sln
+# PlayGoblin run output
+**/PlayGoblinRuns/
+# Python
+__pycache__/
+*.egg-info/
+.venv/
+# Unreal generated
+unreal/**/Binaries/
+unreal/**/Intermediate/
+samples/unreal-sandbox/Binaries/
+samples/unreal-sandbox/Intermediate/
+samples/unreal-sandbox/Saved/
+samples/unreal-sandbox/DerivedDataCache/
+samples/unreal-sandbox/.vs/
+# Local scratch: logs, verification output, planning notes
+out/
+MVP-SPEC.md
+# Python build output
+build/
+dist/
+.pytest_cache/

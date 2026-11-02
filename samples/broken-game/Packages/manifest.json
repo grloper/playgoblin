@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "com.playgoblin.unity": "file:../../../unity",
+    "com.unity.test-framework": "1.6.0"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "BrokenGame.Tests",
+  "rootNamespace": "BrokenGame.Tests",
+  "references": ["PlayGoblin.Runtime", "UnityEngine.TestRunner"],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "overrideReferences": true,
+  "precompiledReferences": ["nunit.framework.dll"],
+  "autoReferenced": false,
+  "defineConstraints": ["UNITY_INCLUDE_TESTS"]
+}

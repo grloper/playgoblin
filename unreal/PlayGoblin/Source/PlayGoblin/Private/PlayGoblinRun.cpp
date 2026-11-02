@@ -1,0 +1,518 @@
+#include "PlayGoblinRun.h"
+
+#include "Engine/World.h"
+#include "EngineUtils.h"
+#include "GameFramework/Pawn.h"
+#include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/WorldSettings.h"
+#include "HAL/FileManager.h"
+#include "HAL/PlatformMisc.h"
+#include "HAL/PlatformTime.h"
+#include "Misc/App.h"
+#include "Misc/EngineVersion.h"
+#include "HAL/PlatformProperties.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
+#include "NavigationPath.h"
+#include "NavigationSystem.h"
+#include "UnrealClient.h"
+
+DEFINE_LOG_CATEGORY(LogPlayGoblin);
+
+// ---------------------------------------------------------------- log capture
+
+void FPGLogCapture::Serialize(const TCHAR* V, ELogVerbosity::Type Verbosity, const FName& Category)
+{
+	if (Category == TEXT("LogPlayGoblin")) return;
+	const bool bScript = Category == TEXT("LogScript") || Category == TEXT("LogBlueprintUserMessages");
+	const bool bError = Verbosity == ELogVerbosity::Error || Verbosity == ELogVerbosity::Fatal;
+	if (!bError && !(bScript && Verbosity == ELogVerbosity::Warning)) return;
+
+	FString Line(V);
+	int32 NewLine;
+	if (Line.FindChar(TEXT('\n'), NewLine)) Line.LeftInline(NewLine);
+	Line.TrimEndInline();
+
+	FString Normalized;
+	for (TCHAR C : Line) if (!FChar::IsDigit(C)) Normalized.AppendChar(C);
+	const FString Kind = bScript ? TEXT("exception") : TEXT("error");
+	const FString Hash = PlayGoblin::StableHash(Kind + TEXT("|") + Category.ToString() + TEXT("|") + Normalized);
+
+	FScopeLock Lock(&Gate);
+	if (FGroup* G = Map.Find(Hash))
+	{
+		G->Count++;
+		G->LastT = CurrentT;
+		return;
+	}
+	FGroup N;
+	N.Hash = Hash; N.Kind = Kind; N.Message = Category.ToString() + TEXT(": ") + Line;
+	N.Count = 1; N.FirstT = N.LastT = CurrentT; N.bHasPos = bHasPos; N.Pos = LastPos;
+	Map.Add(Hash, N);
+	Order.Add(Hash);
+}
+
+void FPGLogCapture::SetContext(double InT, bool bInHasPos, const FVector& InPos)
+{
+	FScopeLock Lock(&Gate);
+	CurrentT = InT; bHasPos = bInHasPos; LastPos = InPos;
+}
+
+TArray<FPGLogCapture::FGroup> FPGLogCapture::Groups() const
+{
+	FScopeLock Lock(&Gate);
+	TArray<FGroup> Out;
+	for (const FString& H : Order) Out.Add(Map[H]);
+	return Out;
+}
+
+int32 FPGLogCapture::GroupCount() const
+{
+	FScopeLock Lock(&Gate);
+	return Map.Num();
+}
+
+// ---------------------------------------------------------------- run
+
+FPlayGoblinRun::FPlayGoblinRun(const FPlayGoblinOptions& InOptions) : Options(InOptions), Rng(InOptions.Seed) {}
+
+FPlayGoblinRun::~FPlayGoblinRun()
+{
+	if (State != EPGState::Ended && State != EPGState::Idle) End(TEXT("aborted"));
+	if (Writer) { Writer->Close(); delete Writer; Writer = nullptr; }
+}
+
+void FPlayGoblinRun::Begin()
+{
+	StartedUtc = FDateTime::UtcNow();
+	StartReal = WaitStartReal = FPlatformTime::Seconds();
+	RunId = StartedUtc.ToString(TEXT("%Y%m%d-%H%M%S")) + FString::Printf(TEXT("-s%d"), Options.Seed);
+	const FString Root = Options.OutputRoot.IsEmpty() ? FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("PlayGoblinRuns")) : Options.OutputRoot;
+	RunDirectory = FPaths::ConvertRelativePathToFull(FPaths::Combine(Root, RunId));
+	IFileManager::Get().MakeDirectory(*RunDirectory, true);
+	EventsPath = FPaths::Combine(RunDirectory, TEXT("events.jsonl"));
+	Writer = IFileManager::Get().CreateFileWriter(*EventsPath, FILEWRITE_AllowRead);
+
+	Logs = MakeUnique<FPGLogCapture>();
+	GLog->AddOutputDevice(Logs.Get());
+
+	if (Options.bRecordFrames)
+	{
+		if (!FApp::CanEverRender()) RecorderOff = TEXT("no rendering device");
+		else { bRecording = true; FramesDir = FPaths::Combine(RunDirectory, TEXT("frames")); }
+	}
+	else RecorderOff = TEXT("disabled in options");
+
+	State = EPGState::Starting;
+	Add(TEXT("run_start"), TEXT(""), nullptr, {
+		{ TEXT("run_id"), RunId }, { TEXT("seed"), FString::FromInt(Options.Seed) },
+		{ TEXT("minutes"), FString::SanitizeFloat(Options.Minutes) },
+		{ TEXT("engine"), TEXT("unreal") }, { TEXT("unity"), TEXT("Unreal ") + FEngineVersion::Current().ToString(EVersionComponent::Patch) },
+		{ TEXT("playgoblin"), TEXT("0.1.0-dev") } });
+	Flush();
+}
+
+void FPlayGoblinRun::Add(const FString& Type, const FString& Detail, const FVector* Pos, TArray<TPair<FString, FString>> Data)
+{
+	FScopeLock Lock(&EventGate);
+	FPGEvent E;
+	E.Seq = ++SeqCounter; E.T = CurrentT; E.Type = Type; E.Detail = Detail;
+	if (Pos) { E.bHasPos = true; E.Pos = *Pos; }
+	E.Data = MoveTemp(Data);
+	if (Memory.Num() >= 20000) Memory.RemoveAt(0);
+	Memory.Add(E);
+	Pending.Add(E);
+}
+
+void FPlayGoblinRun::Flush()
+{
+	if (!Writer) return;
+	TArray<FPGEvent> Local;
+	{
+		FScopeLock Lock(&EventGate);
+		Local = MoveTemp(Pending);
+		Pending.Reset();
+	}
+	for (const FPGEvent& E : Local)
+	{
+		const FString Line = E.ToJson() + TEXT("\n");
+		FTCHARToUTF8 Utf8(*Line);
+		Writer->Serialize(const_cast<char*>(Utf8.Get()), Utf8.Length());
+		Counts.FindOrAdd(E.Type)++;
+		if (bRecording && (E.Type == TEXT("stuck") || E.Type == TEXT("out_of_world")))
+			BurstUntilReal = FPlatformTime::Seconds() + Options.BurstSeconds;
+	}
+	Writer->Flush();
+}
+
+FPGSnapshot FPlayGoblinRun::Snapshot() const
+{
+	FPGSnapshot S;
+	S.State = State; S.RunId = RunId; S.RunDir = RunDirectory; S.EndReason = EndReason;
+	S.T = State == EPGState::Ended ? EndT : CurrentT;
+	{
+		FScopeLock Lock(&EventGate);
+		S.Events = SeqCounter;
+	}
+	S.Stucks = Stucks; S.Falls = Falls;
+	S.Errors = Logs ? Logs->GroupCount() : 0;
+	S.Coverage = WalkableCell.Num() > 0 ? static_cast<float>(Visited.Num()) / WalkableCell.Num() : 0.f;
+	return S;
+}
+
+FString FPlayGoblinRun::EventsJson(int64 Since, int32 Max) const
+{
+	FScopeLock Lock(&EventGate);
+	FString Out = TEXT("{\"events\":[");
+	int64 Next = Since;
+	int32 N = 0;
+	for (const FPGEvent& E : Memory)
+	{
+		if (E.Seq <= Since) continue;
+		if (N >= Max) break;
+		if (N++) Out += TEXT(",");
+		Out += E.ToJson();
+		Next = E.Seq;
+	}
+	return Out + FString::Printf(TEXT("],\"next\":%lld}"), Next);
+}
+
+void FPlayGoblinRun::Tick(UWorld* World)
+{
+	if (State == EPGState::Ended || State == EPGState::Idle || !World) return;
+
+	const double Now = World->GetTimeSeconds();
+	if (!bTimeInit)
+	{
+		bTimeInit = true;
+		StartWorldTime = Now;
+		if (!FMath::IsNearlyEqual(Options.TimeScale, 1.f))
+			if (AWorldSettings* WS = World->GetWorldSettings()) WS->SetTimeDilation(Options.TimeScale);
+		MapName = World->GetMapName();
+	}
+	CurrentT = Now - StartWorldTime;
+	const double Real = FPlatformTime::Seconds();
+	const float FrameMs = static_cast<float>(FApp::GetDeltaTime() * 1000.0);
+	MaxFrameMs = FMath::Max(MaxFrameMs, FrameMs); FrameMsSum += FrameMs; FrameCount++;
+
+	APawn* Pawn = PawnPtr.Get();
+	if (State == EPGState::Starting)
+	{
+		APlayerController* PC = World->GetFirstPlayerController();
+		Pawn = PC ? PC->GetPawn() : nullptr;
+		if (Pawn) OnPlayerFound(World, Pawn);
+		else if (Real - WaitStartReal > Options.WaitForPlayerSeconds)
+		{
+			Add(TEXT("setup_error"), TEXT("No player pawn found. PlayGoblin needs a possessed Pawn (ideally an ACharacter) in the level."), nullptr);
+			Flush();
+			End(TEXT("no_player"));
+			return;
+		}
+	}
+	else if (!Pawn)
+	{
+		State = EPGState::Starting;
+		WaitStartReal = Real;
+		bHasDest = false;
+		Add(TEXT("player_lost"), TEXT(""), nullptr);
+	}
+
+	// Frame-rate watch: skip the first seconds and the frame a screenshot was requested in.
+	if (Options.FpsBudgetMs > 0.f && CurrentT >= IgnoreFpsUntil && GFrameCounter - LastCaptureFrameNo > 1)
+	{
+		if (FrameMs <= Options.FpsBudgetMs) { SlowSeconds = SlowMsSum = 0; SlowFrames = 0; }
+		else
+		{
+			SlowSeconds += FrameMs / 1000.0; SlowMsSum += FrameMs; SlowFrames++;
+			if (SlowSeconds >= 1.0 && CurrentT >= CooldownUntil)
+			{
+				const FVector P = Pawn ? Pawn->GetActorLocation() : FVector::ZeroVector;
+				Add(TEXT("fps_drop"), TEXT(""), Pawn ? &P : nullptr, {
+					{ TEXT("ms"), FString::Printf(TEXT("%.1f"), SlowMsSum / SlowFrames) },
+					{ TEXT("seconds"), FString::Printf(TEXT("%.1f"), SlowSeconds) },
+					{ TEXT("budget_ms"), FString::Printf(TEXT("%.1f"), Options.FpsBudgetMs) } });
+				CooldownUntil = CurrentT + 5.0; SlowSeconds = SlowMsSum = 0; SlowFrames = 0; FpsEvents++;
+			}
+		}
+	}
+	LastRealNow = Real;
+
+	if (State == EPGState::Running && Pawn)
+	{
+		Walk(World, Pawn, CurrentT);
+		if (bRecording) CaptureFrame(CurrentT);
+		Logs->SetContext(CurrentT, true, Pawn->GetActorLocation());
+	}
+	else if (Logs) Logs->SetContext(CurrentT, false, FVector::ZeroVector);
+
+	Flush();
+	if (CurrentT >= Options.Minutes * 60.0) End(TEXT("completed"));
+}
+
+void FPlayGoblinRun::OnPlayerFound(UWorld* World, APawn* Pawn)
+{
+	PawnPtr = Pawn;
+	if (const ACharacter* Ch = Cast<ACharacter>(Pawn))
+	{
+		if (const UCapsuleComponent* Cap = Ch->GetCapsuleComponent()) { HalfHeight = Cap->GetScaledCapsuleHalfHeight(); Radius = Cap->GetScaledCapsuleRadius(); }
+		MoverKind = TEXT("CharacterMovement");
+	}
+	else MoverKind = TEXT("Pawn");
+
+	UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+	bUsesNav = Nav && Nav->GetDefaultNavDataInstance(FNavigationSystem::DontCreate) != nullptr;
+	LastGood = Pawn->GetActorLocation();
+	LastPos = LastGood; bHasLast = true;
+	BuildGrid(World, Pawn);
+	State = EPGState::Running;
+	const FVector P = Pawn->GetActorLocation();
+	Add(TEXT("player_found"), Pawn->GetName(), &P, {
+		{ TEXT("mover"), MoverKind }, { TEXT("navmesh"), bUsesNav ? TEXT("true") : TEXT("false") },
+		{ TEXT("reachable_cells"), FString::FromInt(Walkable.Num()) } });
+}
+
+int32 FPlayGoblinRun::CellIndex(const FVector& P) const
+{
+	const int32 X = FMath::FloorToInt((P.X - GridMin.X) / CellCm);
+	const int32 Y = FMath::FloorToInt((P.Y - GridMin.Y) / CellCm);
+	return (X < 0 || Y < 0 || X >= GridNx || Y >= GridNz) ? -1 : Y * GridNx + X;
+}
+
+void FPlayGoblinRun::BuildGrid(UWorld* World, APawn* Pawn)
+{
+	FBox Bounds(ForceInit);
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		AActor* A = *It;
+		if (A == Pawn || Cast<APawn>(A) || Cast<AWorldSettings>(A) || A->IsHidden()) continue;
+		const FBox B = A->GetComponentsBoundingBox(false);
+		if (B.IsValid && B.GetSize().GetMax() < 500000.f) Bounds += B;
+	}
+	const float LevelZ = Pawn->GetActorLocation().Z - HalfHeight;
+	FallZ = LevelZ - 5000.f;
+	if (!Bounds.IsValid) return;
+
+	GridMin = Bounds.Min;
+	GridNx = FMath::Max(1, FMath::CeilToInt(Bounds.GetSize().X / CellCm));
+	GridNz = FMath::Max(1, FMath::CeilToInt(Bounds.GetSize().Y / CellCm));
+	FCollisionQueryParams Q(SCENE_QUERY_STAT(PlayGoblinGrid), false, Pawn);
+	const FCollisionShape Capsule = FCollisionShape::MakeCapsule(Radius * 0.9f, HalfHeight);
+	float LowestGround = LevelZ;
+	for (int32 Y = 0; Y < GridNz; ++Y)
+		for (int32 X = 0; X < GridNx; ++X)
+		{
+			const FVector C(GridMin.X + (X + 0.5f) * CellCm, GridMin.Y + (Y + 0.5f) * CellCm, 0.f);
+			FHitResult Hit;
+			const FVector From(C.X, C.Y, Bounds.Max.Z + 500.f), To(C.X, C.Y, Bounds.Min.Z - 5000.f);
+			if (!World->LineTraceSingleByChannel(Hit, From, To, ECC_Visibility, Q)) continue;
+			if (Hit.ImpactNormal.Z < 0.7f || FMath::Abs(Hit.ImpactPoint.Z - LevelZ) > Options.MaxClimbCm) continue;
+			const FVector Stand = Hit.ImpactPoint + FVector(0, 0, HalfHeight + 5.f);
+			if (World->OverlapBlockingTestByChannel(Stand, FQuat::Identity, ECC_Pawn, Capsule, Q)) continue;
+			Walkable.Add(Hit.ImpactPoint);
+			WalkableCell.Add(Y * GridNx + X);
+			LowestGround = FMath::Min(LowestGround, Hit.ImpactPoint.Z);
+		}
+	FallZ = LowestGround - 1000.f;
+}
+
+void FPlayGoblinRun::PickDestination(UWorld* World, APawn* Pawn)
+{
+	Path.Reset(); PathIndex = 0; bHasDest = false;
+	const FVector From = Pawn->GetActorLocation();
+	FVector Best = FVector::ZeroVector;
+	bool bFound = false;
+
+	if (bUsesNav)
+	{
+		if (UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World))
+		{
+			for (int32 Try = 0; Try < 8 && !bFound; ++Try)
+			{
+				FNavLocation L;
+				if (!Nav->GetRandomReachablePointInRadius(From, 6000.f, L)) continue;
+				if (FVector::Dist2D(L.Location, From) < 400.f) continue;
+				if (UNavigationPath* P = UNavigationSystemV1::FindPathToLocationSynchronously(World, From, L.Location, Pawn))
+					if (P->IsValid() && !P->IsPartial() && P->PathPoints.Num() > 1) { Path = P->PathPoints; Best = L.Location; bFound = true; }
+			}
+		}
+	}
+	if (!bFound && Walkable.Num() > 0)
+	{
+		// Prefer cells not visited yet.
+		for (int32 Try = 0; Try < 8; ++Try)
+		{
+			const int32 I = Rng.RandRange(0, Walkable.Num() - 1);
+			if (FVector::Dist2D(Walkable[I], From) < 400.f) continue;
+			Best = Walkable[I]; bFound = true;
+			if (!Visited.Contains(WalkableCell[I])) break;
+		}
+	}
+	if (!bFound) return;
+	Dest = Best; bHasDest = true; DestSince = CurrentT;
+	if (Path.Num() == 0) { Path.Add(Dest); }
+	PathIndex = bUsesNav && Path.Num() > 1 ? 1 : 0;
+}
+
+bool FPlayGoblinRun::FeedStuck(double T, const FVector& P, bool bTrying)
+{
+	if (!bTrying) { StuckSamples.Reset(); return false; }
+	StuckSamples.Add({ T, P });
+	while (StuckSamples.Num() > 0 && T - StuckSamples[0].Key > Options.StuckSeconds) StuckSamples.RemoveAt(0);
+	if (StuckSamples.Num() < 2 || T - StuckSamples[0].Key < Options.StuckSeconds * 0.9) return false;
+	FVector2D Min(MAX_flt, MAX_flt), Max(-MAX_flt, -MAX_flt);
+	for (const auto& S : StuckSamples)
+	{
+		Min.X = FMath::Min(Min.X, S.Value.X); Min.Y = FMath::Min(Min.Y, S.Value.Y);
+		Max.X = FMath::Max(Max.X, S.Value.X); Max.Y = FMath::Max(Max.Y, S.Value.Y);
+	}
+	if (FMath::Max(Max.X - Min.X, Max.Y - Min.Y) < Options.StuckDistanceCm) { StuckSamples.Reset(); return true; }
+	return false;
+}
+
+void FPlayGoblinRun::Walk(UWorld* World, APawn* Pawn, double T)
+{
+	const FVector Loc = Pawn->GetActorLocation();
+	if (bHasLast) DistanceCm += FVector::Dist2D(Loc, LastPos);
+	LastPos = Loc; bHasLast = true;
+	const int32 Cell = CellIndex(Loc);
+	if (Cell >= 0) Visited.Add(Cell);
+
+	const UCharacterMovementComponent* CMC = Pawn->FindComponentByClass<UCharacterMovementComponent>();
+	const bool bGrounded = !CMC || CMC->IsMovingOnGround();
+
+	if (T >= NextPos)
+	{
+		NextPos = T + 1.0 / FMath::Max(0.1f, Options.PositionHz);
+		Add(TEXT("pos"), TEXT(""), &Loc);
+	}
+	if (bGrounded && T >= NextGood) { NextGood = T + 1.0; LastGood = Loc; }
+
+	if (Loc.Z < FallZ)
+	{
+		Falls++;
+		Add(TEXT("out_of_world"), TEXT("below_world"), &Loc, { { TEXT("reason"), TEXT("below_world") }, { TEXT("fell_to"), PlayGoblin::MetresCsv(Loc) } });
+		const FVector To = LastGood + FVector(0, 0, HalfHeight + 20.f);
+		Pawn->SetActorLocation(To, false, nullptr, ETeleportType::TeleportPhysics);
+		if (UCharacterMovementComponent* M = Pawn->FindComponentByClass<UCharacterMovementComponent>()) { M->StopMovementImmediately(); M->SetMovementMode(MOVE_Falling); }
+		Respawns++;
+		Add(TEXT("respawn"), TEXT(""), &To, { { TEXT("from"), PlayGoblin::MetresCsv(Loc) } });
+		StuckSamples.Reset(); bHasDest = false; bHasLast = false;
+		return;
+	}
+
+	if (!bHasDest || T - DestSince > 40.0)
+	{
+		if (bHasDest) Add(TEXT("waypoint_timeout"), TEXT(""), &Loc);
+		PickDestination(World, Pawn);
+		if (!bHasDest) return;
+	}
+
+	const FVector Target = Path.IsValidIndex(PathIndex) ? Path[PathIndex] : Dest;
+	FVector Dir = Target - Loc; Dir.Z = 0;
+	const bool bFinal = PathIndex >= Path.Num() - 1;
+	if (Dir.Size() < (bFinal ? 150.f : 120.f))
+	{
+		if (bFinal)
+		{
+			Waypoints++;
+			Add(TEXT("waypoint"), TEXT(""), &Dest);
+			bHasDest = false;
+		}
+		else PathIndex++;
+		return;
+	}
+	Dir.Normalize();
+	Pawn->AddMovementInput(Dir, 1.f);
+
+	if (bGrounded && FeedStuck(T, Loc, true))
+	{
+		Stucks++;
+		FString Blocked;
+		FHitResult Hit;
+		FCollisionQueryParams Q(SCENE_QUERY_STAT(PlayGoblinStuck), false, Pawn);
+		if (World->LineTraceSingleByChannel(Hit, Loc, Loc + Dir * 200.f, ECC_Visibility, Q) && Hit.GetActor())
+			Blocked = Hit.GetActor()->GetName();
+		Add(TEXT("stuck"), FString::Printf(TEXT("no progress for %.0fs"), Options.StuckSeconds), &Loc, {
+			{ TEXT("blocked_by"), Blocked },
+			{ TEXT("controller"), CMC ? StaticEnum<EMovementMode>()->GetNameStringByValue(CMC->MovementMode) : TEXT("") } });
+		bHasDest = false;
+	}
+}
+
+void FPlayGoblinRun::CaptureFrame(double T)
+{
+	const double Real = FPlatformTime::Seconds();
+	if (Real < NextFrameReal) return;
+	const float Hz = Real < BurstUntilReal ? Options.BurstHz : Options.FrameHz;
+	NextFrameReal = Real + 1.0 / FMath::Max(0.1f, Hz);
+	if (FrameIndex >= 3000) return;
+	IFileManager::Get().MakeDirectory(*FramesDir, true);
+	const FString Name = FString::Printf(TEXT("f%05d_t%.2f.png"), FrameIndex++, T);
+	LastCaptureFrameNo = GFrameCounter;
+	FScreenshotRequest::RequestScreenshot(FPaths::Combine(FramesDir, Name), false, false);
+}
+
+void FPlayGoblinRun::End(const FString& Reason)
+{
+	if (State == EPGState::Ended || State == EPGState::Idle) return;
+	EndReason = Reason;
+	EndT = CurrentT;
+	TArray<FPGLogCapture::FGroup> Groups;
+	if (Logs)
+	{
+		Groups = Logs->Groups();
+		for (const FPGLogCapture::FGroup& G : Groups)
+		{
+			Add(TEXT("error_summary"), G.Message, G.bHasPos ? &G.Pos : nullptr, {
+				{ TEXT("hash"), G.Hash }, { TEXT("kind"), G.Kind }, { TEXT("count"), FString::FromInt(G.Count) },
+				{ TEXT("first_t"), FString::Printf(TEXT("%.3f"), G.FirstT) }, { TEXT("last_t"), FString::Printf(TEXT("%.3f"), G.LastT) } });
+		}
+	}
+	Add(TEXT("run_end"), Reason, nullptr);
+	Flush();
+	if (Logs) { GLog->RemoveOutputDevice(Logs.Get()); }
+	WriteSummary(Groups);
+	if (Writer) { Writer->Close(); delete Writer; Writer = nullptr; }
+	State = EPGState::Ended;
+	UE_LOG(LogPlayGoblin, Display, TEXT("Run %s ended (%s). Folder: %s"), *RunId, *Reason, *RunDirectory);
+}
+
+void FPlayGoblinRun::WriteSummary(const TArray<FPGLogCapture::FGroup>& Groups)
+{
+	using namespace PlayGoblin;
+	const float Cov = WalkableCell.Num() > 0 ? static_cast<float>(Visited.Num()) / WalkableCell.Num() : 0.f;
+	FString J = TEXT("{");
+	auto S = [&](const TCHAR* K, const FString& V) { J += FString::Printf(TEXT("\"%s\":\"%s\","), K, *JsonEscape(V)); };
+	auto N = [&](const TCHAR* K, double V) { J += FString::Printf(TEXT("\"%s\":%s,"), K, *Num(V)); };
+	S(TEXT("run_id"), RunId); S(TEXT("playgoblin"), TEXT("0.1.0-dev")); S(TEXT("engine"), TEXT("unreal"));
+	S(TEXT("engine_version"), TEXT("Unreal ") + FEngineVersion::Current().ToString(EVersionComponent::Patch));
+	S(TEXT("platform"), FPlatformProperties::IniPlatformName()); S(TEXT("scene"), MapName);
+	N(TEXT("seed"), Options.Seed); N(TEXT("planned_minutes"), Options.Minutes);
+	S(TEXT("started_utc"), StartedUtc.ToIso8601()); S(TEXT("end_reason"), EndReason);
+	N(TEXT("game_seconds"), EndT); N(TEXT("real_seconds"), FPlatformTime::Seconds() - StartReal);
+	N(TEXT("time_scale"), Options.TimeScale);
+	S(TEXT("mover"), MoverKind);
+	J += FString::Printf(TEXT("\"navmesh\":%s,\"grid\":%s,"), bUsesNav ? TEXT("true") : TEXT("false"), Walkable.Num() > 0 ? TEXT("true") : TEXT("false"));
+	N(TEXT("walkable_cells"), WalkableCell.Num()); N(TEXT("reachable_cells"), Walkable.Num());
+	N(TEXT("coverage"), Cov); N(TEXT("distance_m"), DistanceCm / 100.0);
+	N(TEXT("stuck"), Stucks); N(TEXT("out_of_world"), Falls); N(TEXT("respawns"), Respawns); N(TEXT("waypoints"), Waypoints);
+	N(TEXT("recorded_frames"), FrameIndex);
+	if (!RecorderOff.IsEmpty()) S(TEXT("recorder_off"), RecorderOff);
+	J += FString::Printf(TEXT("\"frames\":{\"frames\":%lld,\"avg_ms\":%s,\"max_ms\":%s},"), FrameCount,
+		*Num(FrameCount ? FrameMsSum / FrameCount : 0.0), *Num(MaxFrameMs));
+	J += TEXT("\"event_counts\":{");
+	bool bFirst = true;
+	for (const auto& KV : Counts) { J += FString::Printf(TEXT("%s\"%s\":%d"), bFirst ? TEXT("") : TEXT(","), *JsonEscape(KV.Key), KV.Value); bFirst = false; }
+	J += TEXT("},\"errors\":[");
+	for (int32 i = 0; i < Groups.Num(); ++i)
+	{
+		const FPGLogCapture::FGroup& G = Groups[i];
+		J += FString::Printf(TEXT("%s{\"hash\":\"%s\",\"kind\":\"%s\",\"message\":\"%s\",\"count\":%d,\"first_t\":%s,\"last_t\":%s}"),
+			i ? TEXT(",") : TEXT(""), *G.Hash, *G.Kind, *JsonEscape(G.Message), G.Count, *Num(G.FirstT), *Num(G.LastT));
+	}
+	J += TEXT("]}");
+	FFileHelper::SaveStringToFile(J, *FPaths::Combine(RunDirectory, TEXT("run.json")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+}

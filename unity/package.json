@@ -1,0 +1,18 @@
+{
+  "name": "com.playgoblin.unity",
+  "version": "0.1.0-dev",
+  "displayName": "PlayGoblin",
+  "description": "Open-source QA bot that walks your Unity game and records crashes, stuck spots and falls with evidence.",
+  "unity": "2022.3",
+  "license": "Apache-2.0",
+  "author": { "name": "grloper", "url": "https://github.com/grloper/playgoblin" },
+  "dependencies": {
+    "com.unity.ugui": "1.0.0",
+    "com.unity.modules.ai": "1.0.0",
+    "com.unity.modules.physics": "1.0.0",
+    "com.unity.modules.imgui": "1.0.0",
+    "com.unity.modules.jsonserialize": "1.0.0",
+    "com.unity.modules.screencapture": "1.0.0",
+    "com.unity.modules.imageconversion": "1.0.0"
+  }
+}

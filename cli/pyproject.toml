@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "playgoblin"
+version = "0.1.0.dev0"
+description = "An open-source QA bot that plays your game unattended (Unity, Unreal, any engine) and reports crashes, stuck spots, falls and more. Includes an MCP server."
+readme = "README.md"
+keywords = ["game-testing", "qa", "unity", "unreal", "mcp", "playtesting", "automation"]
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+dependencies = []
+
+[project.optional-dependencies]
+frames = ["numpy>=1.26", "Pillow>=10"]
+dev = ["pytest>=8", "numpy>=1.26", "Pillow>=10"]
+
+[project.urls]
+Homepage = "https://github.com/grloper/playgoblin"
+Issues = "https://github.com/grloper/playgoblin/issues"
+
+[project.scripts]
+playgoblin = "playgoblin.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["playgoblin*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

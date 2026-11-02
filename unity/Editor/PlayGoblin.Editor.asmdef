@@ -1,0 +1,8 @@
+{
+  "name": "PlayGoblin.Editor",
+  "rootNamespace": "PlayGoblin.Editor",
+  "references": ["PlayGoblin.Runtime"],
+  "includePlatforms": ["Editor"],
+  "excludePlatforms": [],
+  "autoReferenced": true
+}

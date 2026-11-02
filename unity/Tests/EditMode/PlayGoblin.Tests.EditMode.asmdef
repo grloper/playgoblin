@@ -1,0 +1,11 @@
+{
+  "name": "PlayGoblin.Tests.EditMode",
+  "rootNamespace": "PlayGoblin.Tests",
+  "references": ["PlayGoblin.Runtime", "UnityEngine.TestRunner", "UnityEditor.TestRunner", "UnityEngine.UI"],
+  "includePlatforms": ["Editor"],
+  "excludePlatforms": [],
+  "overrideReferences": true,
+  "precompiledReferences": ["nunit.framework.dll"],
+  "autoReferenced": false,
+  "defineConstraints": ["UNITY_INCLUDE_TESTS"]
+}
