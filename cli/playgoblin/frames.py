@@ -51,6 +51,9 @@ def analyze(path: Path) -> FrameStats:
     # Quantize to 4 bits per channel so JPEG noise doesn't count as variety.
     q = (a >> 4).reshape(-1, 3)
     distinct = int(len(np.unique(q[:, 0] * 256 + q[:, 1] * 16 + q[:, 2])))
-    magenta = (a[..., 0] > 200) & (a[..., 1] < 70) & (a[..., 2] > 200)
+    # Unreal's missing-material color is pure magenta (#FF00FF): R and B high, G near zero, R ~ B.
+    # Lit brand pinks such as #FF4DB8 have G around 77+ and are not counted.
+    magenta = ((a[..., 0] > 200) & (a[..., 1] < 40) & (a[..., 2] > 200)
+               & (np.abs(a[..., 0] - a[..., 2]) < 40))
     return FrameStats(blank=std < 3.0 and distinct <= 6, pink_percent=float(magenta.mean() * 100),
                       color_std=std, distinct_colors=distinct)
