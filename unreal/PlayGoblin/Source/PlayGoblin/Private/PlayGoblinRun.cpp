@@ -726,18 +726,27 @@ void FPlayGoblinRun::HumanLook(APlayerController* PC, float DesiredYaw)
 	const float MouseCounts = FMath::Clamp(Err * 1.5f, -40.f, 40.f);
 	if (!bMouseLookChecked)
 	{
-		if (!bMouseProbeStarted) { bMouseProbeStarted = true; MouseProbeYaw = Yaw; }
+		const double Now = PC->GetWorld() ? PC->GetWorld()->GetTimeSeconds() : 0.0;
+		if (MouseProbeReadyAt < 0.0) MouseProbeReadyAt = Now;
+		if (Now - MouseProbeReadyAt < 2.0) return; // pawn must be controllable >= 2 s before probing (skip intro / load)
+		if (!bMouseProbeStarted) { bMouseProbeStarted = true; MouseProbeYaw = Yaw; MouseProbeSent = 0.f; MouseProbeBeganAt = Now; }
 		MouseProbeSent += FMath::Abs(MouseCounts);
 		if (MouseProbeSent > 400.f)
 		{
-			bMouseLookChecked = true;
-			if (FMath::Abs(FRotator::NormalizeAxis(Yaw - MouseProbeYaw)) < 0.5f)
+			// One probe window done. Any visible turn proves look works; 3 dead windows in a row are needed to report.
+			if (FMath::Abs(FRotator::NormalizeAxis(Yaw - MouseProbeYaw)) >= 0.5f)
 			{
+				bMouseLookChecked = true;
+			}
+			else if (++MouseProbeFails >= 3)
+			{
+				bMouseLookChecked = true;
 				bMouseLookWorks = false;
 				const FVector P = PC->GetPawn() ? PC->GetPawn()->GetActorLocation() : FVector::ZeroVector;
-				Add(TEXT("dead_input"), TEXT("Moving the mouse does not turn the camera"), &P, { { TEXT("input"), TEXT("look") }, { TEXT("mouse_counts_sent"), FString::SanitizeFloat(MouseProbeSent) } });
+				Add(TEXT("dead_input"), TEXT("Moving the mouse does not turn the camera"), &P, { { TEXT("input"), TEXT("look") }, { TEXT("mouse_counts_sent"), FString::SanitizeFloat(MouseProbeSent + 400.f * (MouseProbeFails - 1)) }, { TEXT("probe_windows_failed"), FString::FromInt(MouseProbeFails) }, { TEXT("probe_elapsed_s"), FString::SanitizeFloat(Now - MouseProbeBeganAt) } });
 				return;
 			}
+			bMouseProbeStarted = false; // start next window
 		}
 	}
 	PC->InputKey(FInputKeyEventArgs::CreateSimulated(EKeys::MouseX, IE_Axis, MouseCounts, 1, FInputDeviceId::CreateFromInternalId(0)));
