@@ -1,4 +1,4 @@
-﻿# PlayGoblin for Unreal Engine (experimental)
+# PlayGoblin for Unreal Engine (experimental)
 
 > **Status: compiles (0 errors, 0 warnings; UE 5.8.3, Win64 Development Editor) and is verified on its own sample (2026-11-02).** `scripts/verify_unreal.py` (UnrealEditor-Cmd, seed 1, 150 s, `-nullrhi`) finds all five planted bugs in `samples/unreal-sandbox` (trapdoor fall, 70 cm step stuck, error after first fall, dead UMG "Options" button, "TODO: title" menu text) and reports 0 findings on the `-PGClean` level; the same result with `--game-arg=-PlayGoblinKeys` (real input). One seed and one machine only: not yet verified on a real game, and frame capture (rendered mode) was not re-run. Please open an issue with what happened if you try it.
 
@@ -9,6 +9,7 @@ so `playgoblin report`, `playgoblin file-issues` and the MCP server work unchang
 
 - Finds the possessed pawn of player 0 (best with an `ACharacter`), picks random walkable destinations and moves with `AddMovementInput`.
 - Uses the NavMesh when the level has one (`UNavigationSystemV1`), otherwise a floor grid sampled with line traces.
+- Coverage-driven exploration: with the floor grid it heads for the nearest unvisited ground next to explored ground (weighted by distance, deterministic per seed), marks cells within 4 m as visited, skips spots it got stuck at, and falls back to random cells once everything is visited. Coverage (visited / reachable cells, 3 m cells) goes into `run.json` and the `run_end` event, and the report prints it. Sandbox, seed 1, 150 s: 34% -> 73% (broken level), 48% -> 93% (clean level).
 - Detects stuck spots (no horizontal progress for 5 s), falls below the level, and respawns the player at the last safe spot.
 - Prototype look: at run start it lists visible actors that use the engine default/grid material (`WorldGridMaterial`, `DefaultMaterial`, `BasicShapeMaterial`, `Checker` under `/Engine/`) or a mesh from `/Engine/BasicShapes/`, as `prototype_look` events (max 50 actors, one event each; `data.total` has the full count). The CLI turns each into a medium finding. It checks only static assigned materials and meshes, so art that is a placeholder in other ways (grey custom materials, UI) is not seen. The generated sandbox is all engine cubes, so it reports 6 on both levels; `verify_unreal.py` prints that count and does not count it as a miss or false positive.
 - Captures `Error` logs (and `LogScript` warnings, as exceptions), grouped by message.
