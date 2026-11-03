@@ -138,6 +138,15 @@ class TestFrames:
         (f,) = findings_of(root, d)
         assert f.type == "debug_leftover"
 
+    def test_brand_pink_walls_are_not_missing_material(self, root):
+        im = textured(9)
+        for x in range(60):
+            for y in range(40):
+                im.putpixel((x, y), (255, 77, 184))  # #FF4DB8, lit
+        shaded = flat((150, 46, 110), size=(160, 90))  # shaded #FF4DB8
+        d = make_run(root, "r1", [], frames=[(8.0, im), (9.0, shaded)])
+        assert [f for f in findings_of(root, d) if f.type == "debug_leftover"] == []
+
     def test_blank_frames_far_apart_merge_into_one_counted_finding(self, root):
         d = make_run(root, "r1", [], frames=[(5.0, flat()), (60.0, flat())])
         (f,) = findings_of(root, d)
