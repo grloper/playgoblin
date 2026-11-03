@@ -155,6 +155,9 @@ private:
 	float MouseProbeSent = 0.f;
 	float MouseProbeYaw = 0.f;
 	bool bMouseProbeStarted = false;
+	double MouseProbeReadyAt = -1.0; // first look attempt; probing starts 2 s later
+	double MouseProbeBeganAt = 0.0;
+	int32 MouseProbeFails = 0;
 	FKey PressedKey;
 	double ReleaseAt = -1.0;
 	double NextActionAt = 3.0;
