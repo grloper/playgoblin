@@ -34,11 +34,12 @@ namespace
 
 	void Collect(UUserWidget* Root, TArray<UWidget*>& Out, int32 Depth = 0)
 	{
-		if (!Root || !Root->WidgetTree || Depth > 8) return;
+		if (!IsValid(Root) || !IsValid(Root->WidgetTree) || Depth > 8) return;
 		TArray<UWidget*> All;
 		Root->WidgetTree->GetAllWidgets(All);
 		for (UWidget* W : All)
 		{
+			if (!IsValid(W)) continue;
 			Out.Add(W);
 			if (UUserWidget* Nested = Cast<UUserWidget>(W)) Collect(Nested, Out, Depth + 1);
 		}
@@ -76,6 +77,39 @@ namespace
 	}
 
 	uint64 Mix(uint64 H, uint64 V) { return (H ^ V) * 1099511628211ull; }
+}
+
+FPGMenuCrawler::FPGMenuCrawler(FEmit InEmit, int32 InMaxClicks) : Emit(MoveTemp(InEmit)), MaxClicks(InMaxClicks)
+{
+	CleanupHandle = FWorldDelegates::OnWorldCleanup.AddRaw(this, &FPGMenuCrawler::OnWorldCleanup);
+	PostLoadHandle = FCoreUObjectDelegates::PostLoadMapWithWorld.AddRaw(this, &FPGMenuCrawler::OnPostLoadMap);
+}
+
+FPGMenuCrawler::~FPGMenuCrawler()
+{
+	FWorldDelegates::OnWorldCleanup.Remove(CleanupHandle);
+	FCoreUObjectDelegates::PostLoadMapWithWorld.Remove(PostLoadHandle);
+}
+
+void FPGMenuCrawler::ResetWorldState()
+{
+	Queue.Reset();
+	Clicked.Reset(); Skipped.Reset(); PlaceholderSeen.Reset();
+	bWaiting = false; // a click that switched the level is not a dead button
+	WaitPath.Reset(); WaitLabel.Reset(); WaitScene.Reset();
+	BaseSig = 0; Deadline = 0;
+	NextScan = 0;
+	TrackedWorld.Reset();
+}
+
+void FPGMenuCrawler::OnWorldCleanup(UWorld* InWorld, bool, bool)
+{
+	if (!TrackedWorld.IsValid() || TrackedWorld.Get() == InWorld) ResetWorldState();
+}
+
+void FPGMenuCrawler::OnPostLoadMap(UWorld*)
+{
+	ResetWorldState();
 }
 
 uint64 FPGMenuCrawler::Signature(UWorld* World) const
@@ -139,8 +173,16 @@ void FPGMenuCrawler::Scan(UWorld* World)
 
 void FPGMenuCrawler::Tick(UWorld* World)
 {
-	if (!World) return;
+	if (!IsValid(World)) return;
 	const double Now = FPlatformTime::Seconds();
+	if (TrackedWorld.Get() != World)
+	{
+		// New world (level travel): nothing from the old one may be touched again. Start over, after a short settle time.
+		ResetWorldState();
+		TrackedWorld = World;
+		NextScan = Now + SettleSeconds;
+		return;
+	}
 	if (bWaiting)
 	{
 		if (Signature(World) != BaseSig) { bWaiting = false; NextScan = Now + 0.5; }
@@ -168,7 +210,8 @@ void FPGMenuCrawler::Tick(UWorld* World)
 		FQueued Q = Queue[0];
 		Queue.RemoveAt(0);
 		UButton* B = Q.Button.Get();
-		if (!B || !IsValid(B) || !ChainVisible(B) || !B->GetIsEnabled()) continue; // gone since the scan (e.g. an earlier click closed the menu)
+		// Gone since the scan (an earlier click closed the menu or travelled), or owned by another world.
+		if (!IsValid(B) || B->GetWorld() != World || !ChainVisible(B) || !B->GetIsEnabled()) continue;
 		BaseSig = Signature(World);
 		WaitPath = Q.Path; WaitLabel = Q.Label; WaitScene = World->GetMapName();
 		Clicked.Add(Q.Path);

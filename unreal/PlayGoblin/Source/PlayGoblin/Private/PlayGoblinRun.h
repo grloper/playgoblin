@@ -104,6 +104,8 @@ private:
 	void WriteSummary(const TArray<FPGLogCapture::FGroup>& Groups);
 
 	void OnPlayerFound(UWorld* World, APawn* Pawn);
+	/** Level travel: drops everything tied to the previous world (pawn, floor grid, visited/frontier state, path, held keys) and waits for the new player. */
+	void OnWorldChanged(UWorld* World, double Real);
 	void BuildGrid(UWorld* World, APawn* Pawn);
 	/** Reports visible actors that still look like a prototype (engine default/grid material, /Engine/BasicShapes mesh) as prototype_look events. */
 	void ScanPrototypeLook(UWorld* World, APawn* Pawn);
@@ -139,6 +141,8 @@ private:
 	FDateTime StartedUtc;
 	FString MapName, MoverKind;
 	TWeakObjectPtr<APawn> PawnPtr;
+	/** The world this run is walking in. Weak: it is destroyed on level travel. */
+	TWeakObjectPtr<UWorld> RunWorld;
 
 	// Walking
 	bool bUsesNav = false;

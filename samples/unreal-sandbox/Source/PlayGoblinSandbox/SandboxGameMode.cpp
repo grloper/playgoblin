@@ -14,8 +14,11 @@
 #include "SandboxCharacter.h"
 #include "SandboxMenu.h"
 #include "Blueprint/UserWidget.h"
+#include "Containers/Ticker.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogSandbox, Log, All);
+
+bool GSandboxTraveled = false; // -PGTravel: the module outlives level travel, so travel only once (set by whichever path travels first)
 
 ASandboxGameMode::ASandboxGameMode()
 {
@@ -72,6 +75,21 @@ void ASandboxGameMode::BeginPlay()
 	// Planted: "Options" does nothing and the title is placeholder text. Clean: only a working "Play".
 	if (UUserWidget* Menu = CreateWidget<UUserWidget>(GetWorld(), USandboxMenu::StaticClass()))
 		Menu->AddToViewport();
+
+	// -PGTravel: the shape of the Use Your Friends start-up flow. The menu map shows a menu whose first (only) button travels to the
+	// next level, and the game also schedules its own travel on the core ticker after 0.2 s, capturing a raw `this`. If the menu
+	// button is pressed first (a crawler presses it at once), the level is torn down and that lambda runs on a dead game mode.
+	// A plugin that gives the game's own start-up flow a moment before it clicks never gets there. Travels once.
+	if (!GSandboxTraveled && FParse::Param(FCommandLine::Get(), TEXT("PGTravel")))
+	{
+		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([this](float)
+		{
+			GSandboxTraveled = true;
+			UE_LOG(LogSandbox, Display, TEXT("PGTravel: start-up flow opens the next level"));
+			UGameplayStatics::OpenLevel(this, FName(TEXT("/Engine/Maps/Entry")));
+			return false;
+		}), 0.2f);
+	}
 }
 
 void ASandboxGameMode::Tick(float DeltaSeconds)

@@ -192,19 +192,21 @@ FString FPlayGoblinRun::EventsJson(int64 Since, int32 Max) const
 
 void FPlayGoblinRun::Tick(UWorld* World)
 {
-	if (State == EPGState::Ended || State == EPGState::Idle || !World) return;
+	if (State == EPGState::Ended || State == EPGState::Idle || !IsValid(World)) return;
 
 	const double Now = World->GetTimeSeconds();
+	const double Real = FPlatformTime::Seconds();
 	if (!bTimeInit)
 	{
 		bTimeInit = true;
 		StartWorldTime = Now;
+		RunWorld = World;
 		if (!FMath::IsNearlyEqual(Options.TimeScale, 1.f))
 			if (AWorldSettings* WS = World->GetWorldSettings()) WS->SetTimeDilation(Options.TimeScale);
 		MapName = World->GetMapName();
 	}
+	else if (RunWorld.Get() != World) OnWorldChanged(World, Real);
 	CurrentT = Now - StartWorldTime;
-	const double Real = FPlatformTime::Seconds();
 	const float FrameMs = static_cast<float>(FApp::GetDeltaTime() * 1000.0);
 	MaxFrameMs = FMath::Max(MaxFrameMs, FrameMs); FrameMsSum += FrameMs; FrameCount++;
 
@@ -266,6 +268,30 @@ void FPlayGoblinRun::Tick(UWorld* World)
 
 	Flush();
 	if (CurrentT >= Options.Minutes * 60.0) End(TEXT("completed"));
+}
+
+void FPlayGoblinRun::OnWorldChanged(UWorld* World, double Real)
+{
+	UE_LOG(LogPlayGoblin, Log, TEXT("World changed (%s -> %s): resetting pawn, floor grid and exploration state"), *MapName, *World->GetMapName());
+	RunWorld = World;
+	MapName = World->GetMapName();
+	// World time restarts at ~0 in the new world; keep the run clock continuous.
+	StartWorldTime = World->GetTimeSeconds() - CurrentT;
+	if (!FMath::IsNearlyEqual(Options.TimeScale, 1.f))
+		if (AWorldSettings* WS = World->GetWorldSettings()) WS->SetTimeDilation(Options.TimeScale);
+
+	// Everything below points into, or was computed from, the old level. The old pawn/controller are gone: do not release keys on them.
+	PawnPtr.Reset();
+	Walkable.Reset(); WalkableCell.Reset(); CellToWalk.Reset(); Visited.Reset(); Abandoned.Reset();
+	GridMin = FVector::ZeroVector; GridNx = GridNz = 0;
+	Path.Reset(); PathIndex = 0; bHasDest = false; Dest = FVector::ZeroVector;
+	bKeyDown = false; PressedKey = FKey(); ReleaseAt = -1.0;
+	StuckSamples.Reset();
+	bHasLast = false;
+	MouseProbeReadyAt = -1.0; bMouseProbeStarted = false;
+	SlowSeconds = SlowMsSum = 0; SlowFrames = 0;
+	IgnoreFpsUntil = CurrentT + 5.0; // the load hitch is not a frame-rate bug
+	if (State == EPGState::Running) { State = EPGState::Starting; WaitStartReal = Real; }
 }
 
 void FPlayGoblinRun::OnPlayerFound(UWorld* World, APawn* Pawn)
