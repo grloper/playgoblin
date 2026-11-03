@@ -10,6 +10,23 @@ from . import __version__
 from .model import SEVERITY_ICON, Finding, Run
 
 
+LOW_COVERAGE = 0.25
+
+
+def _coverage(run: Run):
+    """Fraction of reachable ground the bot visited: run.json first, the run_end event's data as a fallback."""
+    c = run.summary.get("coverage")
+    if c is None:
+        for e in reversed(run.events):
+            if e.type == "run_end":
+                c = e.data.get("coverage")
+                break
+    try:
+        return None if c is None else float(c)
+    except (TypeError, ValueError):
+        return None
+
+
 def summarize_runs(runs: list[Run]) -> list[dict]:
     rows = []
     for r in runs:
@@ -17,7 +34,8 @@ def summarize_runs(runs: list[Run]) -> list[dict]:
         rows.append({
             "run_id": r.run_id, "seed": s.get("seed"), "scene": s.get("scene"), "unity": s.get("unity") or s.get("engine_version"),
             "end_reason": s.get("end_reason"), "game_seconds": s.get("game_seconds"),
-            "distance_m": s.get("distance_m"), "coverage": s.get("coverage"), "mover": s.get("mover"),
+            "distance_m": s.get("distance_m"), "coverage": _coverage(r), "mover": s.get("mover"),
+            "visited_cells": s.get("visited_cells"), "reachable_cells": s.get("reachable_cells"),
             "navmesh": s.get("navmesh"), "waypoints": s.get("waypoints"),
         })
     return rows
@@ -63,8 +81,13 @@ def _fmt_pct(x) -> str:
 
 def _run_line(r: dict) -> str:
     mins = (r["game_seconds"] or 0) / 60
-    return (f"seed {r['seed']}: {mins:.1f} min, {r['distance_m'] or 0:.0f} m walked, "
-            f"{_fmt_pct(r['coverage'])} covered, ended: {r['end_reason']}")
+    cells = ""
+    if r.get("reachable_cells") and r.get("visited_cells") is not None:
+        cells = f" ({int(float(r.get('visited_cells') or 0))}/{int(float(r['reachable_cells']))} cells)"
+    low = " (low: findings only cover the explored part)" if r["coverage"] is not None and r["coverage"] < LOW_COVERAGE else ""
+    seed = int(r['seed']) if isinstance(r['seed'], float) and r['seed'].is_integer() else r['seed']
+    return (f"seed {seed}: {mins:.1f} min, {r['distance_m'] or 0:.0f} m walked, "
+            f"{_fmt_pct(r['coverage'])} covered{cells}{low}, ended: {r['end_reason']}")
 
 
 def _markdown(confirmed: list[Finding], unconfirmed: list[Finding], rows: list[dict], summary: str | None = None) -> str:

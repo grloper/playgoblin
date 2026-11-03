@@ -177,6 +177,18 @@ private:
 	TArray<FVector> Walkable;
 	TArray<int32> WalkableCell;
 	TSet<int32> Visited;
+	/** Grid cell index -> index into Walkable. */
+	TMap<int32, int32> CellToWalk;
+	/** Destinations the bot gave up on (stuck / timeout); frontier picking skips them so it does not retry a blocked spot forever. */
+	TSet<int32> Abandoned;
+	/** Cells within this distance (cm) of the player count as visited (about what is on screen around a person). */
+	static constexpr float VisitRadiusCm = 400.f;
+	void MarkVisited(const FVector& P);
+	/** Picks the nearest unvisited cell next to explored ground, weighted by distance. Returns the Walkable index or -1. */
+	int32 PickFrontierCell(const FVector& From);
+	float CoverageFraction() const;
+	/** Stops the frontier picker from choosing this cell and its unvisited neighbours again (the spot was blocked). */
+	void AbandonAround(const FVector& P);
 	FVector GridMin = FVector::ZeroVector;
 	int32 GridNx = 0, GridNz = 0;
 	static constexpr float CellCm = 300.f;

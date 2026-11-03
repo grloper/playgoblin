@@ -44,7 +44,7 @@ Every line: `{"seq": 1, "t": 0.0, "type": "...", "detail": "optional text", "pos
 | `fps_drop` | Frame time above budget for a second or more | `pos`; `data`: ms, seconds, budget_ms |
 | `scene_change` | A level or scene loaded (blank frames next to it are ignored) | `detail` = scene |
 | `setup_error` | PlayGoblin could not start (no player found, ...) | `detail` |
-| `run_end` | Last event | `detail` = reason |
+| `run_end` | Last event | `detail` = reason; optional `data.coverage` (0-1), `visited_cells`, `reachable_cells` |
 
 Unknown event types are kept and ignored, so you can add your own (`PlayGoblinEvents.Log`-style game events are fine).
 Group identical errors yourself before writing `error_summary`: the same `hash` in several runs becomes one finding.

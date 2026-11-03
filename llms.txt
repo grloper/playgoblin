@@ -1,6 +1,6 @@
 # PlayGoblin
 
-> An open-source QA bot that plays a game unattended (Unity, Unreal, or any engine that writes its run folder) and reports crashes, stuck spots, falls through the world, dead buttons, placeholder text, missing-material pink, blank screens and FPS drops, with evidence. Apache-2.0. The checks are plain deterministic code; an LLM is optional and only writes a summary.
+> An open-source QA bot that plays a game unattended like a person (real input bindings, mouse look, menu crawl, coverage-driven walking) in Unity, Unreal, or any engine that writes its run folder, and reports crashes, stuck spots, falls through the world, dead input and buttons, placeholder text and art, missing-material pink, blank screens and FPS drops, with frame/clip evidence. Apache-2.0. The checks are plain deterministic code; an LLM is optional and only writes a summary.
 
 ## Use it from an AI agent
 - [SKILL.md](skills/playgoblin/SKILL.md): when and how to use PlayGoblin, step by step
@@ -11,7 +11,7 @@
 - [PROTOCOL.md](docs/PROTOCOL.md): the run-folder format (events.jsonl, run.json, frames) and the optional local API
 - [writer.py](cli/playgoblin/writer.py): reference writer in Python
 - [unity/](unity): Unity package (verified on Unity 6000.4)
-- [unreal/](unreal): Unreal plugin (experimental, see unreal/README.md for its status)
+- [unreal/](unreal): Unreal plugin (verified on UE 5.8.3 Win64: sample project and one real game; see unreal/README.md)
 
 ## Develop
 - [AGENTS.md](AGENTS.md): repo map, how to run every test, conventions

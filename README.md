@@ -1,74 +1,77 @@
 <h1 align="center">PlayGoblin</h1>
 
-<p align="center"><b>A goblin plays your game overnight and files the bugs it breaks.</b><br>
-Open-source QA bot for Unity, Unreal (experimental) and any engine that can write a log file.</p>
+<p align="center"><b>An open-source QA bot that plays your game like a person and files the bugs with evidence.</b><br>
+Unity, Unreal, or any engine that can write a log file. Deterministic checks, no LLM in the loop, no account.</p>
 
-<p align="center"><i>Status: pre-release (0.1.0-dev). Verified on Unity 6000.4 and on two sample games; not yet tried on a real shipped game. The Unreal plugin is written but has not been compiled yet. See "Status" below.</i></p>
+<p align="center">
+<a href="https://github.com/grloper/playgoblin/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/grloper/playgoblin/actions/workflows/ci.yml/badge.svg"></a>
+<a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue"></a>
+<img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-blue">
+</p>
+
+<p align="center">
+<img src="docs/media/uyf-run-frame.jpg" alt="A frame captured by PlayGoblin while walking the town level of an Unreal Engine 5.8 game" width="720"><br>
+<sub>A frame PlayGoblin captured while walking the town level of a real Unreal Engine 5.8 game (Use Your Friends). Frames and clips like this are attached to findings.</sub>
+</p>
+
+> **Status: pre-release (0.1.0-dev).** Works on Unity 6000.4, and on Unreal 5.8.3 (Win64) with a sample project and one real game.
+> Expect rough edges. See [Status](#status) for exactly what has and has not been verified.
 
 ---
 
-PlayGoblin walks your game like a very persistent player: it picks destinations, runs into walls, falls into holes, clicks every menu button,
-and writes down everything that goes wrong. Then it turns that into a report with frames and clips, and optionally into GitHub issues.
+## What it catches
 
-- **Open and free.** Apache-2.0, runs on your machine, no account.
-- **Deterministic first, AI second.** The checks are plain code and give the same answer every run. An LLM is optional and only writes the summary.
-- **Built for AI agents.** An MCP server, a Claude Code skill, and `--json` output on every command. See [Use it from an AI agent](#use-it-from-an-ai-agent).
-- **Any engine.** Unity and Unreal plugins ship here. Anything else can write the [run-folder format](docs/PROTOCOL.md) (one JSON line per event) and get the same checks and reports.
-- **Repeatable.** Seeded runs, and a stuck spot only counts as confirmed once it repeats, so one unlucky run does not file a fake bug.
+These come from real runs, not mock-ups. Most were found by running on a real Unreal Engine 5.8 game:
 
-## What it finds
+| Finding | What happened | Result |
+|---|---|---|
+| **No movement bindings** | The game had no input bound to move the pawn, so the bot could not leave the spawn point | `The player never moved` (critical) |
+| **A level-sized invisible blocking volume** | One actor spanning the whole level hid the ground from every floor probe, so the bot saw nothing walkable | Bot bug found and fixed: it now skips actors it starts inside and logs them |
+| **Grey-box / prototype look** | Visible actors still using `/Engine/BasicShapes` meshes or the engine grid material | `Prototype look: <actor> uses an engine basic shape mesh` (medium) |
+| **Brand-pink false positive** | A pastel-pink game was flagged as "missing-material pink" | Fixed: only pure magenta (high R and B, near-zero G) counts. Exactly the kind of report we want from you |
+| **Dead buttons and placeholder text** | On the Unreal sample: a UMG "Options" button that does nothing, menu text reading `TODO: title` | `dead_button`, `Placeholder text on screen` |
 
-| Check | How | Evidence | Limits today |
-|---|---|---|---|
-| **Crashes and exceptions** | Captures every error/exception log, grouped by message | Message, count, where the player was | |
-| **Dead buttons** | Clicks each active uGUI button twice on menu screens; reports ones that change nothing | Button path and scene | Unity uGUI only; runs before a player exists; never clicks Quit/Exit/Delete/Reset/Buy |
-| **Stuck spots** | Walks to random reachable points; flags where the player stops. Unconfirmed until it repeats | Position, what blocked it, frames and clip | |
-| **Falling through the world** | Player goes below the level or off the NavMesh | Position, frames and clip | |
-| **Blank frames** | Tells a dark scene apart from nothing being drawn | The frames | Needs a rendering device (not headless) |
-| **Debug leftovers** | Magenta missing-material areas; TODO/placeholder text in uGUI and TextMeshPro | Frames, UI object path | **Editor gizmos are not detected** |
-| **FPS drops** | Frame time above a budget for a full second | Position, average frame time | Off unless a budget is set |
+Also: crashes and exceptions (grouped by message), stuck spots (unconfirmed until they repeat), falls through the world, blank frames,
+and FPS drops against a budget. Every finding has evidence: an event, a frame, or a log line. If the bot cannot show it, it does not report it.
 
-Every finding comes from an event, a frame or a log line. If PlayGoblin cannot show it, it does not report it.
-It does **not** judge fun, balance, visuals or audio, and it walks randomly rather than playing to win, so "no findings" never means "bug free".
+<p align="center">
+<img src="docs/media/report-sample.png" alt="The HTML report PlayGoblin wrote for its Unreal sample project" width="520"><br>
+<sub>The real report for the Unreal sample project, which has planted bugs. The full report links frames and clips.</sub>
+</p>
 
-## Quickstart (Unity)
+What it does **not** do: judge fun, balance, visuals or audio. It walks and clicks rather than playing to win, so "no findings" never means "bug free".
 
-Unity 6000.4 is the version tested. Python 3.11+; `numpy` and `Pillow` for frame checks; `ffmpeg` for clips.
+## 30-second quickstart
 
 ```bash
-pip install "./cli[frames]"        # the playgoblin command
+pip install "git+https://github.com/grloper/playgoblin#subdirectory=cli"   # the `playgoblin` command (Python 3.11+)
 ```
 
-1. In Unity: Package Manager > Add package from disk > `unity/package.json`.
-2. Add the **PlayGoblin Player** component to your player object (CharacterController, NavMeshAgent, Rigidbody or plain transform; or implement `IPlayGoblinMover` for a custom controller).
-3. Press Play, then:
+**Unity** (6000.4 tested): Package Manager > Add package from git URL > `https://github.com/grloper/playgoblin.git?path=/unity`,
+add the **PlayGoblin Player** component to your player object, press Play, then:
 
 ```bash
-playgoblin run --minutes 10 --runs 3         # walks, then writes playgoblin-report/report.html, report.md, findings.json
-playgoblin report path/to/PlayGoblinRuns/<run>   # rebuild a report from run folders, offline
-playgoblin file-issues --repo you/your-game      # dry run: shows what would be filed
-playgoblin file-issues --repo you/your-game --yes
+playgoblin run --minutes 10 --runs 3      # walks, then writes playgoblin-report/report.html
 ```
 
-If your game starts from a keyboard-only menu, or spawns the player from code, add a few lines of glue (start the game, add the component, call `PlayGoblinRun.StartRun`). The [broken-game sample test](samples/broken-game/Assets/Tests/PlayMode/SampleRunTests.cs) shows the shape.
+**Unreal** (5.8.3 tested): copy `unreal/PlayGoblin` into your project's `Plugins/`, then run the game with `-playgoblin`:
 
-## Unreal Engine (experimental)
+```bash
+UnrealEditor-Cmd.exe MyGame.uproject -game -playgoblin -PlayGoblinSeconds=300 -PlayGoblinSeed=1 -PlayGoblinOut=D:/runs -PlayGoblinExit
+playgoblin report D:/runs/<run id>        # report.html, report.md, findings.json
+```
 
-[`unreal/PlayGoblin`](unreal) is a C++ plugin that writes the same run folders and serves the same local API: it finds the player pawn,
-walks the NavMesh (or a sampled floor grid when there is none), detects stuck spots, falls and error logs, and captures frames.
-**It has not been compiled or run yet** (the first build attempt was blocked by a running editor). Read [unreal/README.md](unreal/README.md) before relying on it.
+Then, when you want tickets (a dry run unless you add `--yes`):
 
-## Any other engine or game
+```bash
+playgoblin file-issues --repo you/your-game
+```
 
-Write `PlayGoblinRuns/<id>/events.jsonl` and `run.json` from your engine (Godot, a custom engine, a web game, a bot on top of a QA harness),
-then run `playgoblin report <folder>`. The format is small and documented in [docs/PROTOCOL.md](docs/PROTOCOL.md);
-[`playgoblin/writer.py`](cli/playgoblin/writer.py) is a short reference writer you can port.
+Details: [unreal/README.md](unreal/README.md), [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
 ## Use it from an AI agent
 
-```bash
-playgoblin mcp          # MCP server on stdio
-```
+PlayGoblin ships an MCP server and a Claude Code skill, and every command takes `--json`.
 
 ```json
 { "mcpServers": { "playgoblin": { "command": "playgoblin", "args": ["mcp"] } } }
@@ -82,39 +85,68 @@ playgoblin mcp          # MCP server on stdio
 | `playgoblin_findings` | Read a report's findings |
 | `playgoblin_file_issues` | File GitHub issues; **dry run unless `confirm: true`** |
 
-- **Claude Code:** this repo is also a plugin (`.claude-plugin/plugin.json`, `.mcp.json`, `skills/playgoblin/SKILL.md`). The skill tells the agent when to use PlayGoblin, how to read confidence, and that issues need your yes first.
-- **Any agent or script:** every command takes `--json` and prints one JSON document on stdout (progress goes to stderr).
-- [`llms.txt`](llms.txt) and [`AGENTS.md`](AGENTS.md) are the index and the developer guide for coding agents.
+This repo is also a Claude Code plugin (`.claude-plugin/`, `.mcp.json`, [`skills/playgoblin/SKILL.md`](skills/playgoblin/SKILL.md)).
+The skill teaches the agent when to run PlayGoblin, how to read confidence (confirmed vs seen once), and that issues need your yes first.
+[`llms.txt`](llms.txt) and [`AGENTS.md`](AGENTS.md) are the index and developer guide for coding agents.
 
-## Does it work? (the evidence so far)
+## How it plays like a human
 
-`samples/broken-game` is a small Unity level with seven planted bugs and a clean twin scene. `python scripts/verify_samples.py --unity <Unity.exe> --seeds 1 2 3 4 5`
-walks both and compares the report with what was planted. Last full run: all planted bugs found in 5 of 5 seeds, no findings on the clean scene.
-The sample was written by the people who wrote the checks, so treat it as a regression test, **not** as accuracy on real games. Real-game numbers are the next thing to collect.
+The Unreal plugin avoids shortcuts where it can:
+
+- **Real input bindings.** It reads the game's own key and axis bindings and presses the keys that move the player (`-PlayGoblinKeys`). If nothing moves the player, that is a finding.
+- **Mouse look.** It turns with simulated mouse movement, not by setting the camera. If the mouse does nothing after repeated probes, that is a `dead_input` finding.
+- **Key presses.** It taps the game's action keys at irregular intervals and tries a jump when stuck.
+- **Menu crawl.** It finds visible UMG menus, clicks each enabled button once, and reports buttons that change nothing and placeholder text (Unity: uGUI).
+- **Coverage-driven walking.** It heads for the nearest unvisited ground next to what it has seen, not random spots. On the sample project (same seed, 150 s) coverage went from 34% to 73% on the planted level and 48% to 93% on the clean one. Every report prints coverage per run.
+
+## Deterministic checks, no LLM
+
+Checks are plain code, one pure function per check: run folder in, findings out. The same events give the same findings every time,
+and the checks are unit tested (62 Python tests). An LLM is optional and only writes a summary paragraph, labelled as such.
+Runs are seeded, and a stuck spot only counts as confirmed once it repeats, so one unlucky run does not file a fake bug.
+
+## Engines
+
+| Engine | Status |
+|---|---|
+| **Unity** | Package `com.playgoblin.unity`. Built and tested on Unity 6000.4 (80 edit-mode, 22 play-mode tests) and a sample game with planted bugs. Other versions, player builds, UI Toolkit: not tested |
+| **Unreal** | C++ plugin. Compiles on UE 5.8.3 Win64 with 0 warnings. Finds all 5 planted bugs in its sample and nothing on the clean twin (one seed, one machine). Run on one real UE 5.8 game. Not yet: other versions or platforms, Enhanced-Input-driven menus |
+| **Anything else** | Write `events.jsonl` + `run.json` ([run-folder protocol](docs/PROTOCOL.md)) and get the same checks and reports. [`writer.py`](cli/playgoblin/writer.py) is a short reference writer. Tested with a fake Godot-style run, not a real Godot game |
+
+## How it compares
+
+| | Manual QA | Recorded input replays | Generic test frameworks (Unity Test Framework, Unreal Automation) | PlayGoblin |
+|---|---|---|---|---|
+| Finds what a person would | Yes, and judges fun and feel | Only along the recorded path | Only what a test asserts | Crashes, stuck spots, falls, dead input and UI, placeholder art. Not fun |
+| Runs unattended overnight | No | Yes | Yes | Yes |
+| Level changes break it | n/a | Often | When tests hard-code positions | Walks whatever is reachable |
+| You write tests | No | Record once | Yes | No (glue only for custom start flows) |
+| Evidence per bug | Notes, if written | Pass/fail | Assertion message | Frames, clip, position, log line |
+| Cost | People's time | Maintenance | Authoring time | Free, open source |
+
+They complement each other: keep your assertions and your testers. PlayGoblin covers the "nobody walked there" gap.
 
 ## Status
 
 | Part | State |
 |---|---|
-| Unity package | Built and tested on Unity 6000.4: 80 edit-mode tests, 22 play-mode tests |
-| Python CLI, report, MCP server | 48 tests |
-| Unreal plugin | Written, **not yet compiled or tested** |
-| Other Unity versions (2022.3, 6000.0-6000.3), player builds, UI Toolkit | Not tested / not supported yet |
-| Real games | Not yet run on one |
+| Python CLI, report, MCP server | 62 tests, CI on Linux and Windows (Python 3.11 and 3.13) |
+| Unity package | Verified on Unity 6000.4; the planted-bug sample was found in 5 of 5 seeds, no findings on the clean scene |
+| Unreal plugin | Verified on UE 5.8.3 Win64: the sample (headless) and one real game (rendered frames) |
+| Accuracy on real games | Not measured yet. The samples were written by the people who wrote the checks, so treat them as regression tests |
 
 ## Roadmap
 
-- Compile and verify the Unreal plugin on UE 5.x, add menu crawling and a sample level.
-- Run on real projects and publish precision numbers.
-- Editor-gizmo check, UI Toolkit buttons, Unity 2022.3 and player builds, a GitHub Action.
-- A hook so games with custom start flows need no glue code.
-- Comparing runs between builds ("new stuck spot since last night").
+- More real-game runs, and published precision numbers.
+- Unreal: other engine versions, Enhanced Input, a hook for custom start flows.
+- Unity: UI Toolkit buttons, 2022.3 and player builds, an editor-gizmo check.
+- A GitHub Action, and comparing runs between builds ("new stuck spot since last night").
 
 ## Contributing
 
-Issues and PRs welcome. The most useful contribution early on is a game where PlayGoblin misses a bug or reports one that is not there.
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+The most useful contribution right now: **run it on a game and tell us what it missed or got wrong**, with the run folder attached.
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md).
 
 ## License
 
-Apache-2.0
+[Apache-2.0](LICENSE)

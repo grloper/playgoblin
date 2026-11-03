@@ -169,7 +169,7 @@ FPGSnapshot FPlayGoblinRun::Snapshot() const
 	}
 	S.Stucks = Stucks; S.Falls = Falls;
 	S.Errors = Logs ? Logs->GroupCount() : 0;
-	S.Coverage = WalkableCell.Num() > 0 ? static_cast<float>(Visited.Num()) / WalkableCell.Num() : 0.f;
+	S.Coverage = CoverageFraction();
 	return S;
 }
 
@@ -405,12 +405,95 @@ void FPlayGoblinRun::BuildGrid(UWorld* World, APawn* Pawn)
 			if (World->OverlapBlockingTestByChannel(Stand, FQuat::Identity, ECC_Pawn, Capsule, Q)) { ++RejOverlap; continue; }
 			Walkable.Add(Hit.ImpactPoint);
 			WalkableCell.Add(Y * GridNx + X);
+			CellToWalk.Add(Y * GridNx + X, Walkable.Num() - 1);
 			LowestGround = FMath::Min(LowestGround, Hit.ImpactPoint.Z);
 		}
 	FallZ = LowestGround - 1000.f;
 	for (const FString& N : IgnoredVolumes) UE_LOG(LogTemp, Display, TEXT("PlayGoblin grid: ignored actor that encloses the player's level: %s"), *N);
 	UE_LOG(LogTemp, Display, TEXT("PlayGoblin grid: %dx%d cells, walkable=%d, rejected: no-hit=%d steep-or-far=%d blocked=%d, LevelZ=%.0f, bounds=%s"),
 		GridNx, GridNz, Walkable.Num(), RejNoHit, RejSteep, RejOverlap, LevelZ, *Bounds.ToString());
+}
+
+void FPlayGoblinRun::MarkVisited(const FVector& P)
+{
+	const int32 C = CellIndex(P);
+	if (C < 0 || GridNx <= 0) return;
+	const int32 Cx = C % GridNx, Cy = C / GridNx;
+	for (int32 Dy = -1; Dy <= 1; ++Dy)
+		for (int32 Dx = -1; Dx <= 1; ++Dx)
+		{
+			const int32 X = Cx + Dx, Y = Cy + Dy;
+			if (X < 0 || Y < 0 || X >= GridNx || Y >= GridNz) continue;
+			const int32 Idx = Y * GridNx + X;
+			const int32* W = CellToWalk.Find(Idx);
+			if (W && FVector::Dist2D(Walkable[*W], P) <= VisitRadiusCm) Visited.Add(Idx);
+		}
+}
+
+float FPlayGoblinRun::CoverageFraction() const
+{
+	return WalkableCell.Num() > 0 ? static_cast<float>(Visited.Num()) / WalkableCell.Num() : 0.f;
+}
+
+void FPlayGoblinRun::AbandonAround(const FVector& P)
+{
+	const int32 C = CellIndex(P);
+	if (C < 0 || GridNx <= 0) return;
+	const int32 Cx = C % GridNx, Cy = C / GridNx;
+	for (int32 Dy = -1; Dy <= 1; ++Dy)
+		for (int32 Dx = -1; Dx <= 1; ++Dx)
+		{
+			const int32 X = Cx + Dx, Y = Cy + Dy;
+			if (X >= 0 && Y >= 0 && X < GridNx && Y < GridNz) Abandoned.Add(Y * GridNx + X);
+		}
+}
+
+int32 FPlayGoblinRun::PickFrontierCell(const FVector& From)
+{
+	// Frontier = unvisited walkable cell with a visited neighbour. Weight ~ (1 + unvisited neighbours) / (1 + dist/cell)^3, so the
+	// bot mostly takes the nearest piece of unexplored ground and prefers big unexplored clusters. Only Rng is random: same seed, same walk.
+	auto Neighbours = [this](int32 Cell, int32& OutVisited, int32& OutUnvisited)
+	{
+		OutVisited = OutUnvisited = 0;
+		const int32 Cx = Cell % GridNx, Cy = Cell / GridNx;
+		for (int32 Dy = -1; Dy <= 1; ++Dy)
+			for (int32 Dx = -1; Dx <= 1; ++Dx)
+			{
+				if (!Dx && !Dy) continue;
+				const int32 X = Cx + Dx, Y = Cy + Dy;
+				if (X < 0 || Y < 0 || X >= GridNx || Y >= GridNz) continue;
+				const int32 N = Y * GridNx + X;
+				if (!CellToWalk.Contains(N)) continue;
+				if (Visited.Contains(N)) ++OutVisited; else ++OutUnvisited;
+			}
+	};
+	TArray<int32> Frontier, Other;
+	TArray<float> FrontierW, OtherW;
+	double FrontierSum = 0, OtherSum = 0;
+	for (int32 I = 0; I < Walkable.Num(); ++I)
+	{
+		const int32 Cell = WalkableCell[I];
+		if (Visited.Contains(Cell) || Abandoned.Contains(Cell)) continue;
+		const float D = FVector::Dist2D(Walkable[I], From);
+		if (D < 400.f) continue;
+		int32 Vn, Un;
+		Neighbours(Cell, Vn, Un);
+		const float R = 1.f + D / CellCm;
+		const float W = (1.f + Un) / (R * R * R);
+		if (Vn > 0) { Frontier.Add(I); FrontierW.Add(W); FrontierSum += W; }
+		else { Other.Add(I); OtherW.Add(W); OtherSum += W; }
+	}
+	const TArray<int32>& Idx = Frontier.Num() > 0 ? Frontier : Other;
+	const TArray<float>& Ws = Frontier.Num() > 0 ? FrontierW : OtherW;
+	const double Sum = Frontier.Num() > 0 ? FrontierSum : OtherSum;
+	if (Idx.Num() == 0) return -1;
+	double Roll = Rng.FRand() * Sum;
+	for (int32 K = 0; K < Idx.Num(); ++K)
+	{
+		Roll -= Ws[K];
+		if (Roll <= 0) return Idx[K];
+	}
+	return Idx.Last();
 }
 
 void FPlayGoblinRun::PickDestination(UWorld* World, APawn* Pawn)
@@ -420,7 +503,20 @@ void FPlayGoblinRun::PickDestination(UWorld* World, APawn* Pawn)
 	FVector Best = FVector::ZeroVector;
 	bool bFound = false;
 
-	if (bUsesNav)
+	// Coverage-driven: head for the nearest unexplored ground first (needs the floor grid).
+	for (int32 Try = 0; Try < 6 && !bFound && Walkable.Num() > 0; ++Try)
+	{
+		const int32 I = PickFrontierCell(From);
+		if (I < 0) break;
+		if (bUsesNav)
+		{
+			UNavigationPath* P = UNavigationSystemV1::FindPathToLocationSynchronously(World, From, Walkable[I], Pawn);
+			if (P && P->IsValid() && !P->IsPartial() && P->PathPoints.Num() > 1) { Path = P->PathPoints; Best = Walkable[I]; bFound = true; }
+			else Abandoned.Add(WalkableCell[I]); // not reachable on the NavMesh
+		}
+		else { Best = Walkable[I]; bFound = true; }
+	}
+	if (!bFound && bUsesNav)
 	{
 		if (UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World))
 		{
@@ -472,8 +568,7 @@ void FPlayGoblinRun::Walk(UWorld* World, APawn* Pawn, double T)
 	const FVector Loc = Pawn->GetActorLocation();
 	if (bHasLast) DistanceCm += FVector::Dist2D(Loc, LastPos);
 	LastPos = Loc; bHasLast = true;
-	const int32 Cell = CellIndex(Loc);
-	if (Cell >= 0) Visited.Add(Cell);
+	MarkVisited(Loc);
 
 	const UCharacterMovementComponent* CMC = Pawn->FindComponentByClass<UCharacterMovementComponent>();
 	const bool bGrounded = !CMC || CMC->IsMovingOnGround();
@@ -502,6 +597,7 @@ void FPlayGoblinRun::Walk(UWorld* World, APawn* Pawn, double T)
 	{
 		if (bHasDest)
 		{
+			AbandonAround(Dest);
 			APlayerController* PCDiag = Cast<APlayerController>(Pawn->GetController());
 			Add(TEXT("waypoint_timeout"), TEXT(""), &Loc, {
 				{ TEXT("mode"), CMC ? StaticEnum<EMovementMode>()->GetNameStringByValue(CMC->MovementMode) : TEXT("none") },
@@ -579,6 +675,7 @@ void FPlayGoblinRun::Walk(UWorld* World, APawn* Pawn, double T)
 		Add(TEXT("stuck"), FString::Printf(TEXT("no progress for %.0fs"), Options.StuckSeconds), &Loc, {
 			{ TEXT("blocked_by"), Blocked },
 			{ TEXT("controller"), CMC ? StaticEnum<EMovementMode>()->GetNameStringByValue(CMC->MovementMode) : TEXT("") } });
+		AbandonAround(Dest);
 		bHasDest = false;
 	}
 }
@@ -612,7 +709,10 @@ void FPlayGoblinRun::End(const FString& Reason)
 				{ TEXT("first_t"), FString::Printf(TEXT("%.3f"), G.FirstT) }, { TEXT("last_t"), FString::Printf(TEXT("%.3f"), G.LastT) } });
 		}
 	}
-	Add(TEXT("run_end"), Reason, nullptr);
+	Add(TEXT("run_end"), Reason, nullptr, {
+		{ TEXT("coverage"), FString::Printf(TEXT("%.4f"), CoverageFraction()) },
+		{ TEXT("visited_cells"), FString::FromInt(Visited.Num()) },
+		{ TEXT("reachable_cells"), FString::FromInt(WalkableCell.Num()) } });
 	Flush();
 	if (Logs) { GLog->RemoveOutputDevice(Logs.Get()); }
 	WriteSummary(Groups);
@@ -624,7 +724,7 @@ void FPlayGoblinRun::End(const FString& Reason)
 void FPlayGoblinRun::WriteSummary(const TArray<FPGLogCapture::FGroup>& Groups)
 {
 	using namespace PlayGoblin;
-	const float Cov = WalkableCell.Num() > 0 ? static_cast<float>(Visited.Num()) / WalkableCell.Num() : 0.f;
+	const float Cov = CoverageFraction();
 	FString J = TEXT("{");
 	auto S = [&](const TCHAR* K, const FString& V) { J += FString::Printf(TEXT("\"%s\":\"%s\","), K, *JsonEscape(V)); };
 	auto N = [&](const TCHAR* K, double V) { J += FString::Printf(TEXT("\"%s\":%s,"), K, *Num(V)); };
@@ -638,7 +738,7 @@ void FPlayGoblinRun::WriteSummary(const TArray<FPGLogCapture::FGroup>& Groups)
 	S(TEXT("mover"), MoverKind);
 	J += FString::Printf(TEXT("\"navmesh\":%s,\"grid\":%s,"), bUsesNav ? TEXT("true") : TEXT("false"), Walkable.Num() > 0 ? TEXT("true") : TEXT("false"));
 	N(TEXT("walkable_cells"), WalkableCell.Num()); N(TEXT("reachable_cells"), Walkable.Num());
-	N(TEXT("coverage"), Cov); N(TEXT("distance_m"), DistanceCm / 100.0);
+	N(TEXT("visited_cells"), Visited.Num()); N(TEXT("coverage"), Cov); N(TEXT("distance_m"), DistanceCm / 100.0);
 	N(TEXT("stuck"), Stucks); N(TEXT("out_of_world"), Falls); N(TEXT("respawns"), Respawns); N(TEXT("waypoints"), Waypoints);
 	N(TEXT("recorded_frames"), FrameIndex);
 	if (!RecorderOff.IsEmpty()) S(TEXT("recorder_off"), RecorderOff);
