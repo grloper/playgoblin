@@ -85,7 +85,8 @@ def _run_line(r: dict) -> str:
     if r.get("reachable_cells") and r.get("visited_cells") is not None:
         cells = f" ({int(float(r.get('visited_cells') or 0))}/{int(float(r['reachable_cells']))} cells)"
     low = " (low: findings only cover the explored part)" if r["coverage"] is not None and r["coverage"] < LOW_COVERAGE else ""
-    return (f"seed {r['seed']}: {mins:.1f} min, {r['distance_m'] or 0:.0f} m walked, "
+    seed = int(r['seed']) if isinstance(r['seed'], float) and r['seed'].is_integer() else r['seed']
+    return (f"seed {seed}: {mins:.1f} min, {r['distance_m'] or 0:.0f} m walked, "
             f"{_fmt_pct(r['coverage'])} covered{cells}{low}, ended: {r['end_reason']}")
 
 
