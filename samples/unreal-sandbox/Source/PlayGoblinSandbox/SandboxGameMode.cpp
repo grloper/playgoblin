@@ -12,6 +12,8 @@
 #include "Kismet/GameplayStatics.h"
 #include "Misc/CommandLine.h"
 #include "SandboxCharacter.h"
+#include "SandboxMenu.h"
+#include "Blueprint/UserWidget.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogSandbox, Log, All);
 
@@ -62,6 +64,14 @@ void ASandboxGameMode::InitGame(const FString& MapName, const FString& Options, 
 		Sky->GetLightComponent()->SetIntensity(1.f);
 	}
 	UE_LOG(LogSandbox, Display, TEXT("Sandbox level built (%s)."), bClean ? TEXT("clean") : TEXT("with planted bugs"));
+}
+
+void ASandboxGameMode::BeginPlay()
+{
+	Super::BeginPlay();
+	// Planted: "Options" does nothing and the title is placeholder text. Clean: only a working "Play".
+	if (UUserWidget* Menu = CreateWidget<UUserWidget>(GetWorld(), USandboxMenu::StaticClass()))
+		Menu->AddToViewport();
 }
 
 void ASandboxGameMode::Tick(float DeltaSeconds)

@@ -1,6 +1,6 @@
-# PlayGoblin for Unreal Engine (experimental)
+﻿# PlayGoblin for Unreal Engine (experimental)
 
-> **Status: compiles (0 errors, 0 warnings; UE 5.8.3, Win64 Development Editor) and is verified on its own sample (2026-11-02).** `scripts/verify_unreal.py` (UnrealEditor-Cmd, seed 1, 150 s, `-nullrhi`) finds all three planted bugs in `samples/unreal-sandbox` (trapdoor fall, 70 cm step stuck, error after first fall) and reports 0 findings on the `-PGClean` level; the same result with `--game-arg=-PlayGoblinKeys` (real input). One seed and one machine only: not yet verified on a real game, and frame capture (rendered mode) was not re-run. Please open an issue with what happened if you try it.
+> **Status: compiles (0 errors, 0 warnings; UE 5.8.3, Win64 Development Editor) and is verified on its own sample (2026-11-02).** `scripts/verify_unreal.py` (UnrealEditor-Cmd, seed 1, 150 s, `-nullrhi`) finds all five planted bugs in `samples/unreal-sandbox` (trapdoor fall, 70 cm step stuck, error after first fall, dead UMG "Options" button, "TODO: title" menu text) and reports 0 findings on the `-PGClean` level; the same result with `--game-arg=-PlayGoblinKeys` (real input). One seed and one machine only: not yet verified on a real game, and frame capture (rendered mode) was not re-run. Please open an issue with what happened if you try it.
 
 A C++ runtime plugin that walks a game and writes the same run folder as the Unity package ([docs/PROTOCOL.md](../docs/PROTOCOL.md)),
 so `playgoblin report`, `playgoblin file-issues` and the MCP server work unchanged.
@@ -15,7 +15,9 @@ so `playgoblin report`, `playgoblin file-issues` and the MCP server work unchang
 - Optional frame capture through `FScreenshotRequest` (not with `-nullrhi`), and frame-rate drops with a budget.
 - Local HTTP API (same routes as Unity) on 127.0.0.1:47321 for `playgoblin run`.
 
-Not implemented yet: menu crawling (UMG buttons), placeholder-text and blank/pink frame checks on the engine side (the CLI does the frame checks), a hook for custom start flows.
+- Menu crawling (UMG, `-PlayGoblinMenus=0` turns it off): about every 2 s it finds visible `UUserWidget`s in the viewport, reports visible `UTextBlock`s with TODO/TBD/lorem/placeholder/FIXME (whole word) or the default text "Text Block"/"Button" as `placeholder_text`, and clicks each enabled `UButton` once (max 30 per run, top to bottom by widget name). A button is `dead_button` if, within 1 s, the viewport widget set, any widget visibility/enabled state, the world/map, pause state and cursor/input mode all stayed the same. Buttons labelled Quit/Exit are never clicked (`menu_skip`). Limits: clicks are simulated with `UButton::OnClicked.Broadcast()`, so Slate hit testing, hover/press styles and the input stack are not tested; only UMG (not raw Slate, CommonUI-only or Enhanced-Input-driven menus); a button that only changes text, plays a sound or sets game state is reported dead; a click that closes a menu hides the buttons queued behind it that scan (they are picked up only if the menu comes back); buttons are clicked once each by widget class and name.
+
+Not implemented yet: blank/pink frame checks on the engine side (the CLI does the frame checks), a hook for custom start flows.
 Positions are written as metres with Y up (`[x, z, y]` of Unreal's cm values) so the CLI reads them like Unity runs.
 
 ## Use it
@@ -37,6 +39,7 @@ playgoblin run --minutes 10
 |---|---|
 | `-playgoblin` | Enable the plugin and open the local API (`-PlayGoblinPort=` to change the port) |
 | `-PlayGoblinSeconds=N` | Start a run by itself, N game seconds long |
+| `-PlayGoblinMenus=0` | Do not crawl UMG menus (on by default) |
 | `-PlayGoblinSeed=`, `-PlayGoblinOut=`, `-PlayGoblinTimeScale=`, `-PlayGoblinFpsBudgetMs=`, `-PlayGoblinExit` | Seed, output folder, game speed, frame budget, quit afterwards |
 
 **Security note:** the API is control-only (start/stop a run, read events) but Unreal's HTTP server may listen on all interfaces. Only use `-playgoblin` on a trusted network.
@@ -56,3 +59,4 @@ python scripts/verify_unreal.py --editor "C:/Program Files/Epic Games/UE_5.8/Eng
 - The floor grid used to trace from the top of the level on `ECC_Visibility` and rejected every cell in a game with roof/sky meshes. It now traces on `ECC_Pawn` from head height and skips actors the trace starts inside.
 - In the first game tested the pawn stayed in `MOVE_Falling` with zero velocity and no floor at spawn, so the bot never moved. `waypoint_timeout` events now carry movement diagnostics. Whether this is a game bug (player embedded in collision) or a plugin issue is not yet resolved.
 - Launching with `UnrealEditor-Cmd.exe` while the project enables Epic's experimental toolset plugins logs ~47 Python `Error` lines at t=0; they are reported as findings. These are false positives and need a filter (planned).
+

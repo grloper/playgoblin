@@ -1,4 +1,4 @@
-# The PlayGoblin run folder
+﻿# The PlayGoblin run folder
 
 PlayGoblin does not care what engine a game uses. Anything that writes this folder gets the same checks, report,
 deduplication across runs, GitHub issues and AI tooling. The Unity package and the Unreal plugin both write it;
@@ -36,6 +36,7 @@ Every line: `{"seq": 1, "t": 0.0, "type": "...", "detail": "optional text", "pos
 | `error_summary` | One group of identical errors, written at the end | `detail` = message; `data`: **hash**, **kind** (`exception` or `error`), **count**, first_t, last_t; `pos` |
 | `dead_button` | A UI button that did nothing when clicked twice | `detail` = label; `data`: path, label, scene |
 | `placeholder_text` | TODO/lorem-style text visible in the UI | `detail` = text; `data`: path |
+| `menu_skip` | A button the menu crawler did not click | `detail` = label (or "click limit"); `data`: path, reason (`quit_or_exit`, `max_clicks`). Unreal only for now; not turned into a finding |
 | `prototype_look` | A visible actor still looks like a prototype: engine default/grid material, or a mesh from `/Engine/BasicShapes/` (one event per actor, at most 50 per run, written right after `player_found`) | `detail` = actor label; `pos`; `data`: reason (`basic_shape` or `default_material`), mesh, material, component, total (all offending actors, may exceed 50) |
 | `input_map` | What the engine side found bound to input (info) | `data`: forward_keys, action_keys, jump_key, mouse_look (`true`/`false`), axes, enhanced_input |
 | `dead_input` | A control does nothing (e.g. no key moves the player forward) | `detail`; `data`: input (`move` or `look`) |
@@ -81,3 +82,4 @@ Engines that want `playgoblin run` to drive them serve this on `127.0.0.1:47321`
 `POST /run/start` (`{"seed": 1, "minutes": 5}`), `POST /run/stop`, `GET /events?since=N&max=M` (returns `{"events": [], "next": N}`),
 `GET /runs/latest`. `/status` returns `state` (`idle|starting|running|ended`), `run_id`, `run_dir`, `end_reason`, `t`, `events`.
 Without it you can still run your own walk and call `playgoblin report` afterwards.
+

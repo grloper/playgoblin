@@ -1,4 +1,5 @@
 #include "PlayGoblinRun.h"
+#include "PlayGoblinMenus.h"
 
 #include "Engine/World.h"
 #include "Engine/StaticMesh.h"
@@ -256,6 +257,12 @@ void FPlayGoblinRun::Tick(UWorld* World)
 		Logs->SetContext(CurrentT, true, Pawn->GetActorLocation());
 	}
 	else if (Logs) Logs->SetContext(CurrentT, false, FVector::ZeroVector);
+
+	if (Options.bMenus)
+	{
+		if (!Menus) Menus = MakeUnique<FPGMenuCrawler>([this](const FString& Type, const FString& Detail, TArray<TPair<FString, FString>> Data) { Add(Type, Detail, nullptr, MoveTemp(Data)); });
+		Menus->Tick(World);
+	}
 
 	Flush();
 	if (CurrentT >= Options.Minutes * 60.0) End(TEXT("completed"));
