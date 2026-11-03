@@ -31,6 +31,8 @@ struct FPlayGoblinOptions
 	bool bExitWhenDone = false;
 	/** Drive the pawn with simulated key presses (W + control yaw) instead of AddMovementInput, so a missing or broken input binding shows up as a bot that cannot move. */
 	bool bUseKeys = false;
+	/** Crawl visible UMG menus (dead buttons, placeholder text). On by default; -PlayGoblinMenus=0 turns it off. */
+	bool bMenus = true;
 };
 
 enum class EPGState : uint8 { Idle, Starting, Running, Ended };
@@ -118,6 +120,7 @@ private:
 	int32 CellIndex(const FVector& P) const;
 
 	FPlayGoblinOptions Options;
+	TUniquePtr<class FPGMenuCrawler> Menus;
 	EPGState State = EPGState::Idle;
 	FRandomStream Rng;
 	FString EventsPath;

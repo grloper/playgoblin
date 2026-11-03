@@ -21,6 +21,7 @@ public:
 	ASandboxGameMode();
 	virtual void InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage) override;
 	virtual void Tick(float DeltaSeconds) override;
+	virtual void BeginPlay() override;
 
 private:
 	AStaticMeshActor* Box(const FVector& Min, const FVector& Max);

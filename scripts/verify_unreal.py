@@ -1,9 +1,9 @@
-"""Walk the Unreal sandbox with the PlayGoblin plugin and check the report against the planted bugs.
+﻿"""Walk the Unreal sandbox with the PlayGoblin plugin and check the report against the planted bugs.
 
   python scripts/verify_unreal.py --editor "C:/Program Files/Epic Games/UE_5.8/Engine/Binaries/Win64/UnrealEditor-Cmd.exe"
 
-The project must be built first (see unreal/README.md). The sandbox started normally has three planted bugs
-(a trapdoor, a step the character cannot climb, an error after the first fall); started with -PGClean it has none
+The project must be built first (see unreal/README.md). The sandbox started normally has five planted bugs
+(a trapdoor, a step the character cannot climb, an error after the first fall, a dead UMG button, placeholder menu text); started with -PGClean it has none
 and PlayGoblin must report nothing.
 """
 from __future__ import annotations
@@ -21,7 +21,8 @@ from playgoblin.config import Config  # noqa: E402
 from playgoblin.pipeline import analyze  # noqa: E402
 
 PROJECT = ROOT / "samples" / "unreal-sandbox" / "PlayGoblinSandbox.uproject"
-EXPECTED = [("out_of_world", ""), ("stuck", ""), ("exception", "DeathScreen")]
+EXPECTED = [("out_of_world", ""), ("stuck", ""), ("exception", "DeathScreen"),
+            ("dead_button", "Options"), ("debug_leftover", "TODO")]
 # The generated grey sandbox is made of engine cubes and the default material, so it triggers prototype_look on purpose:
 # expected and reported, but not counted as a missed bug or a false positive.
 EXPECTED_EXTRA = "prototype_look"
@@ -90,3 +91,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
