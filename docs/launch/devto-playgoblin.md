@@ -8,8 +8,9 @@ cover_image: https://raw.githubusercontent.com/grloper/playgoblin/main/docs/medi
 
 I'm making an indie game in Unreal Engine 5.8, and like most solo developers I have a testing problem: nobody walks the whole game after every change. I do it for ten minutes, see nothing wrong, and ship the build. So I wrote a bot to do the boring part, and I'm releasing it as open source. It is called PlayGoblin, and it is pre-release (0.1.0-dev), so please read the limits section before you get excited.
 
-![A real 60 s PlayGoblin run on the town level of Use Your Friends, shown as a time-lapse with a status overlay. It is an early, short run: coverage was 4.8% and the bot got stuck twice.](https://raw.githubusercontent.com/grloper/playgoblin/main/docs/media/demo.gif)
-*A real run on my game (time-lapse, overlay added by me). It is an early 60 s run: 4.8% coverage and two unconfirmed stuck spots. The goblin does not always look smart.*
+![A real 150 s PlayGoblin run on the town level of Use Your Friends, shown as a time-lapse with a status overlay of time, waypoints, coverage and stuck events](https://raw.githubusercontent.com/grloper/playgoblin/main/docs/media/demo.gif)
+
+*A real 150 s run on my game, shown as a 3x time-lapse of seconds 19 to 52 (overlay added by me). The full run walked 251 m and reached 19 waypoints, but covered only 12.0% of the 1137 walkable cells; it logged 1 confirmed and 12 unconfirmed stuck spots. Coverage in the overlay is derived from sampled positions. The goblin is not a speedrunner yet.*
 
 ### The problem
 
