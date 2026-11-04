@@ -16,16 +16,28 @@ class FPGMenuCrawler
 public:
 	using FEmit = TFunction<void(const FString& Type, const FString& Detail, TArray<TPair<FString, FString>> Data)>;
 
-	explicit FPGMenuCrawler(FEmit InEmit, int32 InMaxClicks = 30) : Emit(MoveTemp(InEmit)), MaxClicks(InMaxClicks) {}
+	explicit FPGMenuCrawler(FEmit InEmit, int32 InMaxClicks = 30);
+	~FPGMenuCrawler();
 
 	void Tick(UWorld* World);
 	int32 Clicks() const { return ClickCount; }
 
+	/** Seconds a freshly loaded world is left alone before anything is scanned or clicked (a person reads the screen first;
+	 *  games also run their own start-up flow, e.g. an auto-travel timer, in that time). */
+	static constexpr double SettleSeconds = 1.0;
+
 private:
 	void Scan(UWorld* World);
+	/** Drops everything that points into the previous world (queued buttons, wait state, seen paths). The click budget is kept. */
+	void ResetWorldState();
+	void OnWorldCleanup(UWorld* InWorld, bool bSessionEnded, bool bCleanupResources);
+	void OnPostLoadMap(UWorld* InWorld);
 	uint64 Signature(UWorld* World) const;
 
 	FEmit Emit;
+	/** The world the queue/wait state belongs to. Weak: the world may be destroyed while we hold it. */
+	TWeakObjectPtr<UWorld> TrackedWorld;
+	FDelegateHandle CleanupHandle, PostLoadHandle;
 	int32 MaxClicks;
 	int32 ClickCount = 0;
 	double NextScan = 0;

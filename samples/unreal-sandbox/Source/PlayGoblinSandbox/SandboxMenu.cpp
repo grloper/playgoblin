@@ -4,7 +4,10 @@
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
+#include "Kismet/GameplayStatics.h"
 #include "Misc/CommandLine.h"
+
+extern bool GSandboxTraveled;
 
 TSharedRef<SWidget> USandboxMenu::RebuildWidget()
 {
@@ -29,7 +32,7 @@ TSharedRef<SWidget> USandboxMenu::RebuildWidget()
 			return B;
 		};
 		// Options comes first: the crawler clicks top to bottom and "Play" closes the menu.
-		if (!bClean) AddButton(TEXT("OptionsButton"), TEXT("Options")); // planted dead button: no handler
+		if (!bClean && !FParse::Param(FCommandLine::Get(), TEXT("PGTravel"))) AddButton(TEXT("OptionsButton"), TEXT("Options")); // planted dead button: no handler
 		AddButton(TEXT("PlayButton"), TEXT("Play"))->OnClicked.AddDynamic(this, &USandboxMenu::OnPlay);
 	}
 	return Super::RebuildWidget();
@@ -37,5 +40,13 @@ TSharedRef<SWidget> USandboxMenu::RebuildWidget()
 
 void USandboxMenu::OnPlay()
 {
+	// -PGTravel: "Play" travels to the next level like a real menu does; otherwise it just closes the menu.
+	if (FParse::Param(FCommandLine::Get(), TEXT("PGTravel")) && !GSandboxTraveled)
+	{
+		GSandboxTraveled = true;
+		UE_LOG(LogTemp, Display, TEXT("PGTravel: Play pressed, opening the next level"));
+		UGameplayStatics::OpenLevel(this, FName(TEXT("/Engine/Maps/Entry")));
+		return;
+	}
 	RemoveFromParent();
 }
