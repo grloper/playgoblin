@@ -1,6 +1,6 @@
 {
   "name": "playgoblin",
-  "version": "0.1.0-dev",
+  "version": "0.1.0",
   "description": "Let a goblin play your game: an MCP server and skill for the PlayGoblin QA bot (Unity, Unreal, any engine).",
   "author": { "name": "grloper", "url": "https://github.com/grloper" },
   "homepage": "https://github.com/grloper/playgoblin",

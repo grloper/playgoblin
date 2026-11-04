@@ -6,7 +6,7 @@ tags: gamedev, opensource, unrealengine, testing
 cover_image: https://raw.githubusercontent.com/grloper/playgoblin/main/docs/media/banner.png
 ---
 
-I'm making an indie game in Unreal Engine 5.8, and like most solo developers I have a testing problem: nobody walks the whole game after every change. I do it for ten minutes, see nothing wrong, and ship the build. So I wrote a bot to do the boring part, and I'm releasing it as open source. It is called PlayGoblin, and it is pre-release (0.1.0-dev), so please read the limits section before you get excited.
+I'm making an indie game in Unreal Engine 5.8, and like most solo developers I have a testing problem: nobody walks the whole game after every change. I do it for ten minutes, see nothing wrong, and ship the build. So I wrote a bot to do the boring part, and I'm releasing it as open source. It is called PlayGoblin, and it is pre-release (0.1.0), so please read the limits section before you get excited.
 
 ![A real 150 s PlayGoblin run on the town level of Use Your Friends, shown as a time-lapse with a status overlay of time, waypoints, coverage and stuck events](https://raw.githubusercontent.com/grloper/playgoblin/main/docs/media/demo.gif)
 

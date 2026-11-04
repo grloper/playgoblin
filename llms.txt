@@ -1,5 +1,7 @@
 # PlayGoblin
 
+Version 0.1.0 (pre-release).
+
 > An open-source QA bot that plays a game unattended like a person (real input bindings, mouse look, menu crawl, coverage-driven walking) in Unity, Unreal, or any engine that writes its run folder, and reports crashes, stuck spots, falls through the world, dead input and buttons, placeholder text and art, missing-material pink, blank screens and FPS drops, with frame/clip evidence. Apache-2.0. The checks are plain deterministic code; an LLM is optional and only writes a summary.
 
 ## Use it from an AI agent

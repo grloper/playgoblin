@@ -121,7 +121,7 @@ void FPlayGoblinRun::Begin()
 		{ TEXT("run_id"), RunId }, { TEXT("seed"), FString::FromInt(Options.Seed) },
 		{ TEXT("minutes"), FString::SanitizeFloat(Options.Minutes) },
 		{ TEXT("engine"), TEXT("unreal") }, { TEXT("unity"), TEXT("Unreal ") + FEngineVersion::Current().ToString(EVersionComponent::Patch) },
-		{ TEXT("playgoblin"), TEXT("0.1.0-dev") } });
+		{ TEXT("playgoblin"), TEXT("0.1.0") } });
 	Flush();
 }
 
@@ -754,7 +754,7 @@ void FPlayGoblinRun::WriteSummary(const TArray<FPGLogCapture::FGroup>& Groups)
 	FString J = TEXT("{");
 	auto S = [&](const TCHAR* K, const FString& V) { J += FString::Printf(TEXT("\"%s\":\"%s\","), K, *JsonEscape(V)); };
 	auto N = [&](const TCHAR* K, double V) { J += FString::Printf(TEXT("\"%s\":%s,"), K, *Num(V)); };
-	S(TEXT("run_id"), RunId); S(TEXT("playgoblin"), TEXT("0.1.0-dev")); S(TEXT("engine"), TEXT("unreal"));
+	S(TEXT("run_id"), RunId); S(TEXT("playgoblin"), TEXT("0.1.0")); S(TEXT("engine"), TEXT("unreal"));
 	S(TEXT("engine_version"), TEXT("Unreal ") + FEngineVersion::Current().ToString(EVersionComponent::Patch));
 	S(TEXT("platform"), FPlatformProperties::IniPlatformName()); S(TEXT("scene"), MapName);
 	N(TEXT("seed"), Options.Seed); N(TEXT("planned_minutes"), Options.Minutes);
