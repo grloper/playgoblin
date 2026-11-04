@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 760" width="1600" height="760" font-family="'Segoe UI','Inter','Helvetica Neue',Arial,sans-serif"><rect width="1600" height="760" fill="#2B1B3D"/>
+<text x="60" y="80" font-size="44" font-weight="800" fill="#F5F3EE">How PlayGoblin works</text>
+<text x="60" y="118" font-size="23" fill="#F5F3EE" fill-opacity=".75">The game writes a plain run folder; everything after that is ordinary deterministic code.</text>
+<rect x="60" y="220" width="300" height="200" rx="18" fill="#4A3566"/><text x="210.0" y="316.0" font-size="30" font-weight="800" fill="#F5F3EE" text-anchor="middle">Your game</text><text x="210.0" y="346.0" font-size="20" fill="#F5F3EE" fill-opacity=".85" text-anchor="middle">Unity package</text><text x="210.0" y="370.0" font-size="20" fill="#F5F3EE" fill-opacity=".85" text-anchor="middle">Unreal C++ plugin</text><text x="210.0" y="394.0" font-size="20" fill="#F5F3EE" fill-opacity=".85" text-anchor="middle">any engine, via the format</text>
+<line x1="360" y1="320" x2="428" y2="320" stroke="#F5F3EE" stroke-width="4"/><polygon points="440,320 424,311 424,329" fill="#F5F3EE"/>
+<rect x="440" y="220" width="300" height="200" rx="18" fill="#4A3566"/><text x="590.0" y="316.0" font-size="30" font-weight="800" fill="#F5F3EE" text-anchor="middle">Run folder</text><text x="590.0" y="346.0" font-size="20" fill="#F5F3EE" fill-opacity=".85" text-anchor="middle">events.jsonl</text><text x="590.0" y="370.0" font-size="20" fill="#F5F3EE" fill-opacity=".85" text-anchor="middle">frames, clips, run.json</text>
+<line x1="740" y1="320" x2="808" y2="320" stroke="#F5F3EE" stroke-width="4"/><polygon points="820,320 804,311 804,329" fill="#F5F3EE"/>
+<rect x="820" y="220" width="300" height="200" rx="18" fill="#3BB273"/><text x="970.0" y="316.0" font-size="30" font-weight="800" fill="#2B1B3D" text-anchor="middle">Checks</text><text x="970.0" y="346.0" font-size="20" fill="#2B1B3D" fill-opacity=".85" text-anchor="middle">pure functions</text><text x="970.0" y="370.0" font-size="20" fill="#2B1B3D" fill-opacity=".85" text-anchor="middle">no LLM</text><text x="970.0" y="394.0" font-size="20" fill="#2B1B3D" fill-opacity=".85" text-anchor="middle">evidence required</text>
+<line x1="1120" y1="320" x2="1188" y2="320" stroke="#F5F3EE" stroke-width="4"/><polygon points="1200,320 1184,311 1184,329" fill="#F5F3EE"/>
+<g>
+<rect x="1200" y="150" width="340" height="90" rx="18" fill="#FFB020"/><text x="1370.0" y="205.0" font-size="28" font-weight="800" fill="#2B1B3D" text-anchor="middle">report.html</text>
+<rect x="1200" y="265" width="340" height="90" rx="18" fill="#FFB020"/><text x="1370.0" y="320.0" font-size="28" font-weight="800" fill="#2B1B3D" text-anchor="middle">findings.json</text>
+<rect x="1200" y="380" width="340" height="90" rx="18" fill="#FFB020"/><text x="1370.0" y="435.0" font-size="28" font-weight="800" fill="#2B1B3D" text-anchor="middle">GitHub issues</text>
+<text x="1370" y="500" font-size="19" fill="#F5F3EE" fill-opacity=".7" text-anchor="middle">issue filing is a dry run unless confirmed</text>
+</g>
+<rect x="440" y="560" width="680" height="130" rx="18" fill="none" stroke="#F5F3EE" stroke-opacity=".55" stroke-width="3" stroke-dasharray="10 8"/>
+<text x="780" y="608" font-size="28" font-weight="800" fill="#F5F3EE" text-anchor="middle">For AI agents (optional)</text>
+<text x="780" y="646" font-size="22" fill="#F5F3EE" fill-opacity=".85" text-anchor="middle">MCP server: status, run, report, findings, file_issues</text>
+<text x="780" y="674" font-size="22" fill="#F5F3EE" fill-opacity=".85" text-anchor="middle">+ Claude Code skill that teaches when to run it</text>
+<line x1="590" y1="560" x2="590" y2="424" stroke="#F5F3EE" stroke-opacity=".55" stroke-width="3" stroke-dasharray="10 8"/><line x1="970" y1="560" x2="970" y2="424" stroke="#F5F3EE" stroke-opacity=".55" stroke-width="3" stroke-dasharray="10 8"/></svg>

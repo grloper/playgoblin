@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 500" width="1600" height="500" font-family="'Segoe UI','Inter','Helvetica Neue',Arial,sans-serif"><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3A2552"/><stop offset="1" stop-color="#2B1B3D"/></linearGradient></defs>
+<rect width="1600" height="500" fill="url(#bg)"/>
+<g opacity=".10" fill="#3BB273"><circle cx="1500" cy="60" r="190"/><circle cx="1330" cy="470" r="120"/></g>
+<g transform="translate(90 110) scale(1.1)"><rect width="256" height="256" rx="58" fill="#2B1B3D"/>
+  <polygon points="74,110 8,64 24,150 78,152" fill="#3BB273"/>
+  <polygon points="70,116 30,90 38,136 72,140" fill="#2A8A58"/>
+  <polygon points="182,110 248,64 232,150 178,152" fill="#3BB273"/>
+  <polygon points="186,116 226,90 218,136 184,140" fill="#2A8A58"/>
+  <ellipse cx="128" cy="132" rx="66" ry="60" fill="#3BB273"/>
+  <circle cx="102" cy="122" r="18" fill="#FFB020"/><circle cx="154" cy="122" r="18" fill="#FFB020"/>
+  <rect x="99.5" y="106" width="5" height="32" rx="2.5" fill="#2B1B3D"/><rect x="151.5" y="106" width="5" height="32" rx="2.5" fill="#2B1B3D"/>
+  <path d="M78,100 L118,114" stroke="#1B6B43" stroke-width="8" stroke-linecap="round"/>
+  <path d="M178,100 L138,114" stroke="#1B6B43" stroke-width="8" stroke-linecap="round"/>
+  <path d="M88,158 Q128,204 168,158 Z" fill="#2B1B3D"/>
+  <polygon points="102,164 110,181 118,170" fill="#F5F3EE"/><polygon points="138,170 146,181 154,164" fill="#F5F3EE"/>
+  <circle cx="122" cy="146" r="3" fill="#1B6B43"/><circle cx="134" cy="146" r="3" fill="#1B6B43"/>
+  <circle cx="196" cy="198" r="28" fill="#F5F3EE" fill-opacity=".14" stroke="#FFB020" stroke-width="10"/>
+  <path d="M184,188 Q190,182 198,184" stroke="#F5F3EE" stroke-width="5" stroke-linecap="round" fill="none" opacity=".8"/>
+  <line x1="216" y1="218" x2="242" y2="244" stroke="#FFB020" stroke-width="14" stroke-linecap="round"/>
+</g>
+<text x="420" y="255" font-size="132" font-weight="800" fill="#F5F3EE" letter-spacing="-3">Play<tspan fill="#3BB273">Goblin</tspan></text>
+<text x="426" y="325" font-size="38" fill="#F5F3EE" fill-opacity=".92">A goblin plays your game and files the bugs it finds</text>
+<g font-size="22" font-weight="700">
+<rect x="426" y="365" width="150" height="44" rx="22" fill="#3BB273" fill-opacity=".18" stroke="#3BB273"/><text x="501" y="394" fill="#3BB273" text-anchor="middle">Unity</text>
+<rect x="590" y="365" width="150" height="44" rx="22" fill="#3BB273" fill-opacity=".18" stroke="#3BB273"/><text x="665" y="394" fill="#3BB273" text-anchor="middle">Unreal</text>
+<rect x="754" y="365" width="262" height="44" rx="22" fill="#FFB020" fill-opacity=".16" stroke="#FFB020"/><text x="885" y="394" fill="#FFB020" text-anchor="middle">No LLM in the checks</text>
+<rect x="1030" y="365" width="190" height="44" rx="22" fill="#F5F3EE" fill-opacity=".1" stroke="#F5F3EE" stroke-opacity=".6"/><text x="1125" y="394" fill="#F5F3EE" text-anchor="middle">Open source</text>
+</g></svg>
