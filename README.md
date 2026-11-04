@@ -1,7 +1,11 @@
+<p align="center"><img src="docs/media/logo.png" alt="PlayGoblin logo" width="120"></p>
+
 <h1 align="center">PlayGoblin</h1>
 
 <p align="center"><b>An open-source QA bot that plays your game like a person and files the bugs with evidence.</b><br>
 Unity, Unreal, or any engine that can write a log file. Deterministic checks, no LLM in the loop, no account.</p>
+
+<p align="center"><img src="docs/media/demo.gif" alt="A real PlayGoblin run on an Unreal Engine 5.8 game, with a status overlay of time, waypoints, coverage and stuck events" width="720"><br><sub>A real 150 s run on a UE 5.8 game (3x time-lapse of seconds 19-52, overlay added). Full run: 251 m walked, 19 waypoints, 12.0% coverage, 1 confirmed and 12 unconfirmed stuck spots.</sub></p>
 
 <p align="center">
 <a href="https://github.com/grloper/playgoblin/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/grloper/playgoblin/actions/workflows/ci.yml/badge.svg"></a>
