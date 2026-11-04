@@ -47,6 +47,8 @@ What it does **not** do: judge fun, balance, visuals or audio. It walks and clic
 
 ## 30-second quickstart
 
+**Download [v0.1.0](https://github.com/grloper/playgoblin/releases/tag/v0.1.0) (pre-release):** [CLI wheel](https://github.com/grloper/playgoblin/releases/download/v0.1.0/playgoblin-0.1.0-py3-none-any.whl) · [Unreal plugin zip](https://github.com/grloper/playgoblin/releases/download/v0.1.0/PlayGoblin-Unreal-plugin-0.1.0.zip) · [SHA256SUMS](https://github.com/grloper/playgoblin/releases/download/v0.1.0/SHA256SUMS). Or install from source:
+
 ```bash
 pip install "git+https://github.com/grloper/playgoblin#subdirectory=cli"   # the `playgoblin` command (Python 3.11+)
 ```
