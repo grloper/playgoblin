@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "playgoblin"
-version = "0.1.0.dev0"
+version = "0.1.0"
 description = "An open-source QA bot that plays your game unattended (Unity, Unreal, any engine) and reports crashes, stuck spots, falls and more. Includes an MCP server."
 readme = "README.md"
 keywords = ["game-testing", "qa", "unity", "unreal", "mcp", "playtesting", "automation"]

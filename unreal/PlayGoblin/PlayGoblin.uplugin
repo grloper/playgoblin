@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
 	"Version": 1,
-	"VersionName": "0.1.0-dev",
+	"VersionName": "0.1.0",
 	"FriendlyName": "PlayGoblin",
 	"Description": "A QA bot that plays your game unattended and records crashes, stuck spots and falls. Writes the same run folders as the PlayGoblin Unity package, so the playgoblin CLI builds the report.",
 	"Category": "Testing",

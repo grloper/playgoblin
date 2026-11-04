@@ -18,7 +18,7 @@ Unity, Unreal, or any engine that can write a log file. Deterministic checks, no
 <sub>A frame PlayGoblin captured while walking the town level of a real Unreal Engine 5.8 game (Use Your Friends). Frames and clips like this are attached to findings.</sub>
 </p>
 
-> **Status: pre-release (0.1.0-dev).** Works on Unity 6000.4, and on Unreal 5.8.3 (Win64) with a sample project and one real game.
+> **Status: pre-release (0.1.0).** Works on Unity 6000.4, and on Unreal 5.8.3 (Win64) with a sample project and one real game.
 > Expect rough edges. See [Status](#status) for exactly what has and has not been verified.
 
 ---

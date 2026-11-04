@@ -61,7 +61,7 @@ namespace PlayGoblin
     [AddComponentMenu("")]
     public sealed class PlayGoblinRun : MonoBehaviour
     {
-        public const string Version = "0.1.0-dev";
+        public const string Version = "0.1.0";
 
         static readonly object SnapGate = new object();
         static PlayGoblinRunSnapshot _snapshot = new PlayGoblinRunSnapshot { State = PlayGoblinRunState.Idle };

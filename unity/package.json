@@ -1,6 +1,6 @@
 {
   "name": "com.playgoblin.unity",
-  "version": "0.1.0-dev",
+  "version": "0.1.0",
   "displayName": "PlayGoblin",
   "description": "Open-source QA bot that walks your Unity game and records crashes, stuck spots and falls with evidence.",
   "unity": "2022.3",
