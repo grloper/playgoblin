@@ -1,7 +1,7 @@
 <p align="center"><img src="docs/media/logo.png" alt="PlayGoblin logo" width="120"></p>
 
 <h1 align="center">PlayGoblin</h1>
-
+[![M8ven Score](https://m8ven.ai/badge/mcp/grloper/playgoblin)](https://m8ven.ai/mcp/grloper/playgoblin?s=readme
 <p align="center"><b>An open-source QA bot that plays your game like a person and files the bugs with evidence.</b><br>
 Unity, Unreal, or any engine that can write a log file. Deterministic checks, no LLM in the loop, no account.</p>
 
